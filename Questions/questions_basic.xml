@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Evaluation Suite">
+    <!-- Test Case 1: Math question with numeric or word answer -->
+    <test_case id="math-1" category="arithmetic">
+        <name>Basic Addition (1+1)</name>
+        <question>What is 1 + 1? Answer in one short sentence.</question>
+        <system_prompt>You are a precise calculator assistant. Be concise.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>50</max_tokens>
+        <assertions>
+            <!-- Check that answer contains '2' or 'two' (case-insensitive) -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>2</expected>
+                <expected>two</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">error</assert>
+            <assert type="max_latency_sec">15.0</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Factual Knowledge with contains & not_contains assertions -->
+    <test_case id="fact-france" category="geography">
+        <name>Capital of France</name>
+        <question>What is the capital city of France?</question>
+        <system_prompt>You are a factual knowledge assistant. Give a direct answer.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>50</max_tokens>
+        <assertions>
+            <assert type="contains" case_sensitive="false">Paris</assert>
+            <assert type="not_contains" case_sensitive="false">London</assert>
+            <assert type="not_contains" case_sensitive="false">Berlin</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Code generation with regex & contains_all assertions -->
+    <test_case id="code-even" category="coding">
+        <name>Python Even Number Function</name>
+        <question>Write a Python function named `is_even` that takes an integer and returns True if it is even, False otherwise.</question>
+        <system_prompt>You are an expert Python programmer. Output valid Python code.</system_prompt>
+        <temperature>0.1</temperature>
+        <max_tokens>150</max_tokens>
+        <assertions>
+            <!-- Function name and signature pattern (handles optional parameter and return type annotations) -->
+            <assert type="regex">def\s+is_even\s*\([^)]*\).*?:</assert>
+            <!-- Must contain modulo operator and return keyword -->
+            <assert type="contains_all">
+                <expected>def is_even</expected>
+                <expected>return</expected>
+                <expected>%</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 4: Reasoning / Logic with performance metrics check -->
+    <test_case id="logic-bool" category="reasoning">
+        <name>Boolean Logic</name>
+        <question>If all roses are flowers and some flowers fade quickly, can we be certain that all roses fade quickly? Answer Yes or No and briefly explain.</question>
+        <system_prompt>You are a formal logic expert. Answer directly.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>100</max_tokens>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>No</expected>
+                <expected>cannot be certain</expected>
+                <expected>not necessarily</expected>
+            </assert>
+            <assert type="max_latency_sec">15.0</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 5: Word count / formatting constraint -->
+    <test_case id="format-color" category="formatting">
+        <name>Single Word Answer</name>
+        <question>What color is the clear sky on a sunny day? Answer with exactly one word.</question>
+        <system_prompt>Reply with only one single word. No punctuation, no extra text.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>20</max_tokens>
+        <assertions>
+            <assert type="contains" case_sensitive="false">blue</assert>
+            <assert type="max_latency_sec">5.0</assert>
+        </assertions>
+    </test_case>
+</test_suite>

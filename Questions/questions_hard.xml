@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Challenging and Adversarial Suite">
+    <!-- Test Case 1: Tokenization Blindness - Character Counting -->
+    <test_case id="hard-count-r" category="tokenization_blindness">
+        <name>Letter Counting (Strawberry)</name>
+        <question>How many times does the letter 'r' appear in the word 'strawberry'? Answer with only the digit and no other words or punctuation.</question>
+        <system_prompt>Reply with only a single digit.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>10</max_tokens>
+        <assertions>
+            <assert type="exact">3</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Numeric Reasoning - Decimal Comparison -->
+    <test_case id="hard-decimal-cmp" category="numeric_reasoning">
+        <name>Decimal Comparison (9.11 vs 9.9)</name>
+        <question>Which number is strictly greater: 9.11 or 9.9? Answer with only the number and nothing else.</question>
+        <system_prompt>Reply with only the chosen number. No explanation.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>10</max_tokens>
+        <assertions>
+            <assert type="exact">9.9</assert>
+            <assert type="not_contains">9.11</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Cognitive Reflection - Bat and Ball Trick Math -->
+    <test_case id="hard-bat-ball" category="cognitive_reflection">
+        <name>Bat and Ball Math Trap</name>
+        <question>A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How many cents does the ball cost? Answer with only the number of cents.</question>
+        <system_prompt>Answer with only the number. No words, no symbols.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>10</max_tokens>
+        <assertions>
+            <assert type="exact">5</assert>
+            <assert type="not_contains">10</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 4: Strict Negative Constraint - Lipogram (No 'e') -->
+    <test_case id="hard-no-e" category="negative_constraint">
+        <name>Negative Constraint (Zero 'e's)</name>
+        <question>Write a complete sentence describing a cat. Do NOT use the letter 'e' anywhere in your response. The letter 'e' or 'E' must not appear at all.</question>
+        <system_prompt>Strictly avoid the letter 'e'. Any 'e' is a complete failure.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>50</max_tokens>
+        <assertions>
+            <assert type="not_contains" case_sensitive="false">e</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 5: Exact Character Reversal -->
+    <test_case id="hard-reverse-word" category="character_manipulation">
+        <name>Word Reversal (KNOWLEDGE)</name>
+        <question>Reverse the letters of the word 'KNOWLEDGE'. Answer with only the reversed word in all-capital letters.</question>
+        <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
+        <temperature>0.0</temperature>
+        <max_tokens>20</max_tokens>
+        <assertions>
+            <assert type="exact">EGDELWONK</assert>
+        </assertions>
+    </test_case>
+</test_suite>

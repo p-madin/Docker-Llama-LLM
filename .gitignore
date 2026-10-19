@@ -1,3 +1,6 @@
-# Local AI Data (Large binaries and private DBs)
+# Ignore local AI data (large binaries and private DBs)
 ollama/
 open-webui/
+.aider*
+
+Test metrics/

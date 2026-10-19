@@ -2,11 +2,21 @@ services:
   ollama:
     image: ollama/ollama
     container_name: ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      #not sure this helped
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_FLASH_ATTENTION=1
+      - TEST_MODEL=${TEST_MODEL:-llama3.2}
     ports:
       - "11434:11434"
     volumes:
       - ./ollama:/root/.ollama
+      - ./Modelfile:/Modelfile
       - ./entrypoint.sh:/root/entrypoint.sh
+      - ./.env:/root/.env:ro
     entrypoint: ["/usr/bin/bash", "/root/entrypoint.sh"]
     restart: always
     deploy:
@@ -16,16 +26,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: open-webui
-    ports:
-      - "3000:8080"
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-    volumes:
-      - ./open-webui:/app/backend/data
-    depends_on:
-      - ollama
-    restart: always

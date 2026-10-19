@@ -1,0 +1,370 @@
+[
+  {
+    "model": "qwen2.5-coder",
+    "endpoint": "http://localhost:11434",
+    "total_cases": 10,
+    "total_assertions": 19,
+    "passed_assertions": 16,
+    "failed_assertions": 3,
+    "pass_rate_pct": 84.2,
+    "total_latency_sec": 48.99,
+    "total_tokens_generated": 282,
+    "avg_tokens_per_sec": 5.76,
+    "cases": [
+      {
+        "test_id": "math-1",
+        "name": "Basic Addition (1+1)",
+        "model": "qwen2.5-coder",
+        "question": "What is 1 + 1? Answer in one short sentence.",
+        "output": "1 + 1 is 2.",
+        "metrics": {
+          "latency_sec": 29.581,
+          "latency_ms": 29580.7,
+          "prompt_tokens": 37,
+          "completion_tokens": 9,
+          "total_tokens": 46,
+          "load_duration_ms": 59.9,
+          "eval_tokens_per_sec": 1.09,
+          "eval_duration_sec": 8.26,
+          "prompt_tokens_per_sec": 1.74
+        },
+        "case_passed": false,
+        "assertions": [
+          {
+            "rule": "contains_any",
+            "passed": true,
+            "message": "Contains match '2' (any of ['2', 'two'])",
+            "expected": [
+              "2",
+              "two"
+            ],
+            "actual": "2"
+          },
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited 'error'",
+            "expected": "NOT 'error'",
+            "actual": "absent"
+          },
+          {
+            "rule": "max_latency_sec",
+            "passed": false,
+            "message": "Latency 29.58s exceeded limit of 15.00s",
+            "expected": "<= 15.0s",
+            "actual": "29.581s"
+          }
+        ]
+      },
+      {
+        "test_id": "fact-france",
+        "name": "Capital of France",
+        "model": "qwen2.5-coder",
+        "question": "What is the capital city of France?",
+        "output": "The capital city of France is Paris.",
+        "metrics": {
+          "latency_sec": 0.749,
+          "latency_ms": 748.9,
+          "prompt_tokens": 33,
+          "completion_tokens": 9,
+          "total_tokens": 42,
+          "load_duration_ms": 12.94,
+          "eval_tokens_per_sec": 20.79,
+          "eval_duration_sec": 0.433,
+          "prompt_tokens_per_sec": 113.42
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "contains",
+            "passed": true,
+            "message": "Contains 'Paris'",
+            "expected": "Paris",
+            "actual": "The capital city of France is Paris."
+          },
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited 'London'",
+            "expected": "NOT 'London'",
+            "actual": "absent"
+          },
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited 'Berlin'",
+            "expected": "NOT 'Berlin'",
+            "actual": "absent"
+          }
+        ]
+      },
+      {
+        "test_id": "code-even",
+        "name": "Python Even Number Function",
+        "model": "qwen2.5-coder",
+        "question": "Write a Python function named `is_even` that takes an integer and returns True if it is even, False otherwise.",
+        "output": "Certainly! Below is a Python function named `is_even` that takes an integer as input and returns `True` if the number is even, and `False` otherwise.\n\n```python\ndef is_even(number):\n    \"\"\"\n    Determines if the given number is even.\n\n    Args:\n    number (int): The number to check.\n\n    Returns:\n    bool: True if the number is even, False otherwise.\n    \"\"\"\n    return number % 2 == 0\n```\n\nYou can use this function to check if a number is even by calling it with an integer argument. For example:\n\n```python\nprint(is_even(4))  # Output: True\nprint(is_even(7))  # Output: False\n```",
+        "metrics": {
+          "latency_sec": 8.531,
+          "latency_ms": 8530.6,
+          "prompt_tokens": 49,
+          "completion_tokens": 149,
+          "total_tokens": 198,
+          "load_duration_ms": 13.07,
+          "eval_tokens_per_sec": 18.75,
+          "eval_duration_sec": 7.947,
+          "prompt_tokens_per_sec": 86.89
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "regex",
+            "passed": true,
+            "message": "Matches regex pattern: r'def\\s+is_even\\s*\\([^)]*\\).*?:'",
+            "expected": "regex: def\\s+is_even\\s*\\([^)]*\\).*?:",
+            "actual": "Certainly! Below is a Python function named `is_even` that takes an integer as input and returns `Tr"
+          },
+          {
+            "rule": "contains_all",
+            "passed": true,
+            "message": "Contains all: ['def is_even', 'return', '%']",
+            "expected": [
+              "def is_even",
+              "return",
+              "%"
+            ],
+            "actual": "missing: []"
+          }
+        ]
+      },
+      {
+        "test_id": "logic-bool",
+        "name": "Boolean Logic",
+        "model": "qwen2.5-coder",
+        "question": "If all roses are flowers and some flowers fade quickly, can we be certain that all roses fade quickly? Answer Yes or No and briefly explain.",
+        "output": "No. \n\nExplanation: The statement \"all roses are flowers\" establishes a subset relationship, where roses are a type of flower. The statement \"some flowers fade quickly\" tells us that there is at least one flower that fades quickly. However, it does not provide any information about the fading rate of roses specifically. Therefore, we cannot conclude that all roses fade quickly based on the given information.",
+        "metrics": {
+          "latency_sec": 4.759,
+          "latency_ms": 4759.5,
+          "prompt_tokens": 52,
+          "completion_tokens": 80,
+          "total_tokens": 132,
+          "load_duration_ms": 13.54,
+          "eval_tokens_per_sec": 19.2,
+          "eval_duration_sec": 4.166,
+          "prompt_tokens_per_sec": 91.31
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "contains_any",
+            "passed": true,
+            "message": "Contains match 'No' (any of ['No', 'cannot be certain', 'not necessarily'])",
+            "expected": [
+              "No",
+              "cannot be certain",
+              "not necessarily"
+            ],
+            "actual": "No"
+          },
+          {
+            "rule": "max_latency_sec",
+            "passed": true,
+            "message": "Latency 4.76s <= limit 15.00s",
+            "expected": "<= 15.0s",
+            "actual": "4.759s"
+          }
+        ]
+      },
+      {
+        "test_id": "format-color",
+        "name": "Single Word Answer",
+        "model": "qwen2.5-coder",
+        "question": "What color is the clear sky on a sunny day? Answer with exactly one word.",
+        "output": "Blue",
+        "metrics": {
+          "latency_sec": 0.66,
+          "latency_ms": 660.0,
+          "prompt_tokens": 44,
+          "completion_tokens": 2,
+          "total_tokens": 46,
+          "load_duration_ms": 13.41,
+          "eval_tokens_per_sec": 37.37,
+          "eval_duration_sec": 0.054,
+          "prompt_tokens_per_sec": 77.77
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "contains",
+            "passed": true,
+            "message": "Contains 'blue'",
+            "expected": "blue",
+            "actual": "Blue"
+          },
+          {
+            "rule": "max_latency_sec",
+            "passed": true,
+            "message": "Latency 0.66s <= limit 5.00s",
+            "expected": "<= 5.0s",
+            "actual": "0.66s"
+          }
+        ]
+      },
+      {
+        "test_id": "hard-count-r",
+        "name": "Letter Counting (Strawberry)",
+        "model": "qwen2.5-coder",
+        "question": "How many times does the letter 'r' appear in the word 'strawberry'? Answer with only the digit and no other words or punctuation.",
+        "output": "2",
+        "metrics": {
+          "latency_sec": 0.639,
+          "latency_ms": 639.2,
+          "prompt_tokens": 50,
+          "completion_tokens": 2,
+          "total_tokens": 52,
+          "load_duration_ms": 14.27,
+          "eval_tokens_per_sec": 37.41,
+          "eval_duration_sec": 0.053,
+          "prompt_tokens_per_sec": 88.53
+        },
+        "case_passed": false,
+        "assertions": [
+          {
+            "rule": "exact",
+            "passed": false,
+            "message": "Expected exact match '3', got '2'",
+            "expected": "3",
+            "actual": "2"
+          }
+        ]
+      },
+      {
+        "test_id": "hard-decimal-cmp",
+        "name": "Decimal Comparison (9.11 vs 9.9)",
+        "model": "qwen2.5-coder",
+        "question": "Which number is strictly greater: 9.11 or 9.9? Answer with only the number and nothing else.",
+        "output": "9.9",
+        "metrics": {
+          "latency_sec": 0.744,
+          "latency_ms": 744.3,
+          "prompt_tokens": 49,
+          "completion_tokens": 4,
+          "total_tokens": 53,
+          "load_duration_ms": 14.15,
+          "eval_tokens_per_sec": 25.37,
+          "eval_duration_sec": 0.158,
+          "prompt_tokens_per_sec": 86.71
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "exact",
+            "passed": true,
+            "message": "Exact match: '9.9'",
+            "expected": "9.9",
+            "actual": "9.9"
+          },
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited '9.11'",
+            "expected": "NOT '9.11'",
+            "actual": "absent"
+          }
+        ]
+      },
+      {
+        "test_id": "hard-bat-ball",
+        "name": "Bat and Ball Math Trap",
+        "model": "qwen2.5-coder",
+        "question": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How many cents does the ball cost? Answer with only the number of cents.",
+        "output": "5",
+        "metrics": {
+          "latency_sec": 0.84,
+          "latency_ms": 840.4,
+          "prompt_tokens": 68,
+          "completion_tokens": 2,
+          "total_tokens": 70,
+          "load_duration_ms": 14.16,
+          "eval_tokens_per_sec": 37.38,
+          "eval_duration_sec": 0.054,
+          "prompt_tokens_per_sec": 88.87
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "exact",
+            "passed": true,
+            "message": "Exact match: '5'",
+            "expected": "5",
+            "actual": "5"
+          },
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited '10'",
+            "expected": "NOT '10'",
+            "actual": "absent"
+          }
+        ]
+      },
+      {
+        "test_id": "hard-no-e",
+        "name": "Negative Constraint (Zero 'e's)",
+        "model": "qwen2.5-coder",
+        "question": "Write a complete sentence describing a cat. Do NOT use the letter 'e' anywhere in your response. The letter 'e' or 'E' must not appear at all.",
+        "output": "A cat is a small, furry animal with sharp claws and a bushy tail.",
+        "metrics": {
+          "latency_sec": 1.581,
+          "latency_ms": 1581.4,
+          "prompt_tokens": 66,
+          "completion_tokens": 18,
+          "total_tokens": 84,
+          "load_duration_ms": 12.99,
+          "eval_tokens_per_sec": 20.08,
+          "eval_duration_sec": 0.896,
+          "prompt_tokens_per_sec": 99.3
+        },
+        "case_passed": true,
+        "assertions": [
+          {
+            "rule": "not_contains",
+            "passed": true,
+            "message": "Does not contain prohibited 'e'",
+            "expected": "NOT 'e'",
+            "actual": "absent"
+          }
+        ]
+      },
+      {
+        "test_id": "hard-reverse-word",
+        "name": "Word Reversal (KNOWLEDGE)",
+        "model": "qwen2.5-coder",
+        "question": "Reverse the letters of the word 'KNOWLEDGE'. Answer with only the reversed word in all-capital letters.",
+        "output": "EGODLEWONK",
+        "metrics": {
+          "latency_sec": 0.905,
+          "latency_ms": 905.5,
+          "prompt_tokens": 45,
+          "completion_tokens": 7,
+          "total_tokens": 52,
+          "load_duration_ms": 13.49,
+          "eval_tokens_per_sec": 22.22,
+          "eval_duration_sec": 0.315,
+          "prompt_tokens_per_sec": 79.46
+        },
+        "case_passed": false,
+        "assertions": [
+          {
+            "rule": "exact",
+            "passed": false,
+            "message": "Expected exact match 'EGDELWONK', got 'EGODLEWONK'",
+            "expected": "EGDELWONK",
+            "actual": "EGODLEWONK"
+          }
+        ]
+      }
+    ]
+  }
+]
