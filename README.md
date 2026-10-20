@@ -29,25 +29,33 @@ graph LR
 ## 1. Quick Start
 
 ### Running the Tests
-You can run tests immediately using the provided runner script. It will detect whether Python is installed locally or automatically run the test suite via the running Docker container:
+
+#### 1. Automated Multi-Model Benchmark (Full Suite)
+To iterate through all curated models in `.env` (each started in its own isolated Docker container with automatic warm-up and clean shutdown between models):
 
 ```powershell
-# Using the Batch script:
-.\run_tests.bat
+# Benchmark all curated models in .env:
+.\run_all_models.ps1
 
-# Or using the PowerShell script:
+# Benchmark specific models only:
+.\run_all_models.ps1 -Models @("llama3.2", "smollm2:latest", "qwen2.5-coder:3b")
+
+# Benchmark with verbose console output:
+.\run_all_models.ps1 -VerboseOutput
+```
+
+#### 2. Single Model Test (Active Container)
+To execute tests against the currently running container model:
+
+```powershell
+# Test model defined in .env:
 .\run_tests.ps1
 
 # Test a specific model:
-.\run_tests.bat --model llama3.2
+.\run_tests.ps1 -Model "qwen2.5-coder:3b"
 
-# Compare multiple models head-to-head:
-.\run_tests.bat --model "llama3.2,smollm2:latest,qwen2.5-coder:3b"
-```
-
-If you have Python 3 installed natively on Windows:
-```bash
-python testLLM.py --model llama3.2
+# Test with verbose output:
+.\run_tests.ps1 -Verbose
 ```
 
 ---
@@ -91,6 +99,9 @@ All test suites are organized in `./Questions/*.xml`. `testLLM.py` automatically
 | `exact` | Exact string match (ignoring leading/trailing whitespace) | `<assert type="exact">Blue</assert>` |
 | `max_latency_sec` | Ensures response time is under threshold | `<assert type="max_latency_sec">10.0</assert>` |
 | `min_tokens_per_sec` | Ensures generation throughput is above threshold | `<assert type="min_tokens_per_sec">25.0</assert>` |
+| `not_empty` | Rejects empty output (requires text/sentence fabrication) | `<assert type="not_empty"/>` |
+| `min_words` | Requires a minimum word count | `<assert type="min_words">4</assert>` |
+| `min_length` | Requires a minimum character length | `<assert type="min_length">15</assert>` |
 
 ### SOLID Assertions Architecture (`modelAssertion.py`)
 
@@ -143,9 +154,7 @@ smollm2:latest         | 91.7%        | 11/12        | 78.20 tok/s    | 5.12s
 Reports are automatically organized by model and timestamp:
 - **Model-Specific Metrics**: `.\Test metrics\<model name>\<date time>_out.json` and `.md`
   - Example: [Test metrics/llama3.2/2026-10-19_16-12-49_out.md](file:///c:/Workspace/Docker%20Workspace/Docker-Llama-LLM/Test%20metrics/llama3.2/2026-10-19_16-12-49_out.md)
-  - Example: [Test metrics/llama3.2/2026-10-19_16-12-49_out.json](file:///c:/Workspace/Docker%20Workspace/Docker-Llama-LLM/Test%20metrics/llama3.2/2026-10-19_16-12-49_out.json)
 - **Comparison Reports** (when multiple models tested): `.\Test metrics\comparison\<date time>_comparison.json` and `.md`
-- **Latest Consolidated Snapshot**: [test_results.json](file:///c:/Workspace/Docker%20Workspace/Docker-Llama-LLM/test_results.json) and [test_results.md](file:///c:/Workspace/Docker%20Workspace/Docker-Llama-LLM/test_results.md)
 
 ---
 

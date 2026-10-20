@@ -6,46 +6,35 @@
         <question>How many times does the letter 'r' appear in the word 'strawberry'? Answer with only the digit and no other words or punctuation.</question>
         <system_prompt>Reply with only a single digit.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>10</max_tokens>
         <assertions>
-            <assert type="exact">3</assert>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>3</expected>
+                <expected>\boxed{3}</expected>
+                <expected>three</expected>
+            </assert>
         </assertions>
     </test_case>
 
-    <!-- Test Case 2: Numeric Reasoning - Decimal Comparison -->
-    <test_case id="hard-decimal-cmp" category="numeric_reasoning">
-        <name>Decimal Comparison (9.11 vs 9.9)</name>
-        <question>Which number is strictly greater: 9.11 or 9.9? Answer with only the number and nothing else.</question>
-        <system_prompt>Reply with only the chosen number. No explanation.</system_prompt>
-        <temperature>0.0</temperature>
-        <max_tokens>10</max_tokens>
-        <assertions>
-            <assert type="exact">9.9</assert>
-            <assert type="not_contains">9.11</assert>
-        </assertions>
-    </test_case>
-
-    <!-- Test Case 3: Cognitive Reflection - Bat and Ball Trick Math -->
-    <test_case id="hard-bat-ball" category="cognitive_reflection">
-        <name>Bat and Ball Math Trap</name>
-        <question>A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How many cents does the ball cost? Answer with only the number of cents.</question>
-        <system_prompt>Answer with only the number. No words, no symbols.</system_prompt>
-        <temperature>0.0</temperature>
-        <max_tokens>10</max_tokens>
-        <assertions>
-            <assert type="exact">5</assert>
-            <assert type="not_contains">10</assert>
-        </assertions>
-    </test_case>
 
     <!-- Test Case 4: Strict Negative Constraint - Lipogram (No 'e') -->
     <test_case id="hard-no-e" category="negative_constraint">
         <name>Negative Constraint (Zero 'e's)</name>
         <question>Write a complete sentence describing a cat. Do NOT use the letter 'e' anywhere in your response. The letter 'e' or 'E' must not appear at all.</question>
-        <system_prompt>Strictly avoid the letter 'e'. Any 'e' is a complete failure.</system_prompt>
+        <system_prompt>Strictly avoid the letter 'e'. Any 'e' is a complete failure. You must write an actual, complete sentence describing a cat.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>50</max_tokens>
         <assertions>
+            <!-- 1. The answer is not correct if a sentence has not been fabricated -->
+            <assert type="not_empty"/>
+            <assert type="min_words">4</assert>
+            <!-- 2. Must be relevant to a cat -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>cat</expected>
+                <expected>purr</expected>
+                <expected>fur</expected>
+                <expected>paws</expected>
+                <expected>tail</expected>
+            </assert>
+            <!-- 3. Strict negative constraint: zero 'e' or 'E' letters -->
             <assert type="not_contains" case_sensitive="false">e</assert>
         </assertions>
     </test_case>
@@ -56,9 +45,26 @@
         <question>Reverse the letters of the word 'KNOWLEDGE'. Answer with only the reversed word in all-capital letters.</question>
         <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>20</max_tokens>
         <assertions>
-            <assert type="exact">EGDELWONK</assert>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>EGDELWONK</expected>
+                <expected>E-G-D-E-L-W-O-N-K</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 6: Multi-Step LaTeX Arithmetic Stress Probe -->
+    <test_case id="hard-complex-arithmetic" category="numeric_reasoning">
+        <name>Complex Multi-Fraction Arithmetic</name>
+        <question>Evaluate the following arithmetic expression to a single final number: \frac{\left(45 \cdot 20 + 120 - 34\right) \cdot \left(72 - 12 \cdot 4\right)}{15 \cdot 4 - 28 + 16} + \frac{144 \cdot \left(85 + 35 - 40\right)}{18 \cdot 4 - 40 + 4} - \left(12 \cdot 8 - 25 + 14\right) \cdot \left(15 - 9 + 1\right)</question>
+        <system_prompt>Calculate step by step and provide the final integer result.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>218</expected>
+                <expected>two-hundred and eighteen</expected>
+                <expected>two hundred and eighteen</expected>
+            </assert>
         </assertions>
     </test_case>
 </test_suite>

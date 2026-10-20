@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Hard Heuristics Suite">
+    <!-- Test Case: Character Manipulation - Short Word Reversal -->
+    <test_case id="heuristics-reverse-memory" category="character_manipulation">
+        <name>Word Reversal (MEMORY)</name>
+        <question>Reverse the letters of the word 'MEMORY'. Answer with only the reversed word in all-capital letters.</question>
+        <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>YROMEM</expected>
+                <expected>Y-R-O-M-E-M</expected>
+            </assert>
+        </assertions>
+    </test_case>
+</test_suite>

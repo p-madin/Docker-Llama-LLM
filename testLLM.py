@@ -75,7 +75,7 @@ class TestCase:
     def __init__(self, test_id: str, name: str, question: str,
                  system_prompt: str = "",
                  temperature: float = 0.0,
-                 max_tokens: int = 256,
+                 max_tokens: int = 1200,
                  model_override: Optional[str] = None,
                  assertions: Optional[ModelAssertion] = None,
                  source_file: str = ""):
@@ -131,8 +131,8 @@ def parse_questions_xml(xml_path: str) -> List[TestCase]:
         temp_text = tc_elem.findtext("temperature", "0.0").strip()
         temperature = float(temp_text) if temp_text else 0.0
 
-        max_tok_text = tc_elem.findtext("max_tokens", "256").strip()
-        max_tokens = int(max_tok_text) if max_tok_text else 256
+        max_tok_text = tc_elem.findtext("max_tokens", "1200").strip()
+        max_tokens = int(max_tok_text) if max_tok_text else 1200
 
         model_override = tc_elem.findtext("model")
         if model_override:
@@ -194,7 +194,7 @@ class LLMClient:
         self.timeout = timeout
 
     def send_chat(self, model: str, question: str, system_prompt: str = "",
-                  temperature: float = 0.0, max_tokens: int = 256) -> Dict[str, Any]:
+                  temperature: float = 0.0, max_tokens: int = 1200) -> Dict[str, Any]:
         """
         Dispatches request and measures execution time and hardware performance metrics.
         Returns: {
@@ -204,8 +204,9 @@ class LLMClient:
         }
         """
         messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+        # A/B Testing: Disabled system_prompt dispatch to test performance and compliance impact
+        # if system_prompt:
+        #     messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": question})
 
         if self.api_type == "ollama":
@@ -265,7 +266,12 @@ class LLMClient:
         }
 
         if self.api_type == "ollama" and "message" in raw_json:
-            content = raw_json.get("message", {}).get("content", "")
+            msg = raw_json.get("message", {})
+            content = msg.get("content", "")
+            thinking = msg.get("thinking", "")
+            done_reason = raw_json.get("done_reason", "")
+            if not content and thinking and done_reason == "length":
+                metrics["truncated_in_thinking"] = True
             
             # Nanosecond fields from Ollama
             total_dur_ns = raw_json.get("total_duration", 0)
@@ -313,7 +319,22 @@ class LLMClient:
         }
 
 
-def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestCase], verbose: bool = False) -> Dict[str, Any]:
+def warmup_model(client: LLMClient, model: str) -> None:
+    """
+    Verifies that model weights, CUDA kernels, and SWA / KV-cache buffers
+    (num_ctx=8192) are active and warm in GPU VRAM before benchmark timing begins.
+    """
+    print(f"{Colors.DIM}Verifying model '{model}' readiness in GPU memory...{Colors.RESET}", end="", flush=True)
+    t0 = time.perf_counter()
+    try:
+        client.send_chat(model=model, question="Warmup check: confirm ready.", max_tokens=5)
+        dur = time.perf_counter() - t0
+        print(f" {Colors.GREEN}[READY in {dur:.2f}s]{Colors.RESET}\n")
+    except Exception as e:
+        print(f" {Colors.YELLOW}[WARMUP SKIPPED: {e}]{Colors.RESET}\n")
+
+
+def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestCase], verbose: bool = False, warmup: bool = True, blanket_max_tokens: int = 1200) -> Dict[str, Any]:
     """Runs test suite against a model and returns aggregate results."""
     results = []
     total_assertions = 0
@@ -325,13 +346,19 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
     print(f"{Colors.BOLD}{Colors.CYAN} Running Test Suite on Model: {Colors.YELLOW}{default_model}{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN} Endpoint: {Colors.RESET}{client.host} ({client.api_type.upper()})")
     print(f"{Colors.BOLD}{Colors.CYAN} Total Test Cases: {Colors.RESET}{len(test_cases)}")
+    print(f"{Colors.BOLD}{Colors.CYAN} Blanket Max Tokens: {Colors.RESET}{blanket_max_tokens}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.RESET}\n")
+
+    if warmup:
+        warmup_model(client, default_model)
 
     for idx, tc in enumerate(test_cases, 1):
         target_model = tc.model_override or default_model
         source_prefix = f"[{tc.source_file}] " if tc.source_file else ""
         print(f"{Colors.BOLD}[Test {idx}/{len(test_cases)}] {source_prefix}{tc.name} ({tc.test_id}){Colors.RESET}")
         print(f"{Colors.DIM}Question:{Colors.RESET} {tc.question}")
+
+        effective_max_tokens = blanket_max_tokens if (blanket_max_tokens and blanket_max_tokens > 0) else tc.max_tokens
 
         case_start = time.perf_counter()
         try:
@@ -340,7 +367,7 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
                 question=tc.question,
                 system_prompt=tc.system_prompt,
                 temperature=tc.temperature,
-                max_tokens=tc.max_tokens
+                max_tokens=effective_max_tokens
             )
             output_text = resp["content"]
             metrics = resp["metrics"]
@@ -375,6 +402,8 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
         clean_preview = output_text.strip().replace("\n", " ")
         if len(clean_preview) > 120:
             clean_preview = clean_preview[:117] + "..."
+        if not output_text and metrics.get("truncated_in_thinking"):
+            clean_preview = f"{Colors.YELLOW}(cut off in <think> phase at {effective_max_tokens} tokens - increase headroom){Colors.RESET}"
         print(f"{Colors.DIM}Answer:{Colors.RESET}   {clean_preview if clean_preview else '(empty/error)'}")
 
         # Print Metrics
@@ -409,17 +438,37 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
             "assertions": assertion_results
         })
 
+    passed_cases = sum(1 for r in results if r["case_passed"])
+    failed_cases = len(test_cases) - passed_cases
+    question_pass_rate = (passed_cases / len(test_cases) * 100) if test_cases else 0.0
+
     pass_rate = (passed_assertions / total_assertions * 100) if total_assertions > 0 else 0.0
     avg_speed = (total_tokens_generated / total_latency) if total_latency > 0 else 0.0
+
+    # Console summary block
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN} Model Evaluation Complete: {Colors.YELLOW}{default_model}{Colors.RESET}")
+    print(f" Questions Solved:  {Colors.BOLD}{passed_cases}/{len(test_cases)} ({question_pass_rate:.1f}%){Colors.RESET}")
+    print(f" Assertions Passed: {passed_assertions}/{total_assertions} ({pass_rate:.1f}%)")
+    print(f" Generation Speed:  {avg_speed:.2f} tok/s | Total Latency: {total_latency:.2f}s")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.RESET}\n")
 
     summary = {
         "model": default_model,
         "endpoint": client.host,
+        "total_questions": len(test_cases),
+        "questions_solved": passed_cases,
+        "questions_failed": failed_cases,
+        "question_pass_rate_pct": round(question_pass_rate, 1),
         "total_cases": len(test_cases),
+        "passed_cases": passed_cases,
+        "failed_cases": failed_cases,
+        "case_pass_rate_pct": round(question_pass_rate, 1),
         "total_assertions": total_assertions,
         "passed_assertions": passed_assertions,
         "failed_assertions": total_assertions - passed_assertions,
         "pass_rate_pct": round(pass_rate, 1),
+        "assertion_pass_rate_pct": round(pass_rate, 1),
         "total_latency_sec": round(total_latency, 2),
         "total_tokens_generated": total_tokens_generated,
         "avg_tokens_per_sec": round(avg_speed, 2),
@@ -431,22 +480,24 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
 
 def print_comparison_table(summaries: List[Dict[str, Any]]):
     """Prints a comparative table if multiple models were tested."""
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*85}{Colors.RESET}")
-    print(f"{Colors.BOLD}{'MODEL COMPARISON & BENCHMARK SUMMARY':^85}{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN}{'='*85}{Colors.RESET}")
-    header = f"{'Model':<22} | {'Pass Rate':<12} | {'Assertions':<12} | {'Avg Speed':<14} | {'Total Time':<10}"
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*96}{Colors.RESET}")
+    print(f"{Colors.BOLD}{'MODEL COMPARISON & BENCHMARK SUMMARY':^96}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*96}{Colors.RESET}")
+    header = f"{'Model':<20} | {'Questions Solved':<18} | {'Q Pass %':<10} | {'Assertions':<14} | {'Avg Speed':<14} | {'Total Time':<10}"
     print(header)
-    print("-" * 85)
+    print("-" * 96)
 
     for s in summaries:
-        color = Colors.GREEN if s["pass_rate_pct"] == 100.0 else (Colors.YELLOW if s["pass_rate_pct"] >= 70.0 else Colors.RED)
-        pass_str = f"{color}{s['pass_rate_pct']}%{Colors.RESET}"
+        q_pct = s.get("question_pass_rate_pct", s.get("case_pass_rate_pct", 0.0))
+        color = Colors.GREEN if q_pct == 100.0 else (Colors.YELLOW if q_pct >= 70.0 else Colors.RED)
+        q_str = f"{s.get('questions_solved', s.get('passed_cases', 0))}/{s.get('total_cases', 0)}"
+        q_pct_str = f"{color}{q_pct:.1f}%{Colors.RESET}"
         assert_str = f"{s['passed_assertions']}/{s['total_assertions']}"
         speed_str = f"{s['avg_tokens_per_sec']} tok/s"
         time_str = f"{s['total_latency_sec']}s"
-        print(f"{s['model']:<22} | {pass_str:<21} | {assert_str:<12} | {speed_str:<14} | {time_str:<10}")
+        print(f"{s['model']:<20} | {q_str:<18} | {q_pct_str:<19} | {assert_str:<14} | {speed_str:<14} | {time_str:<10}")
 
-    print(f"{Colors.BOLD}{Colors.CYAN}{'='*85}{Colors.RESET}\n")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*96}{Colors.RESET}\n")
 
 
 def sanitize_filename(name: str) -> str:
@@ -462,11 +513,14 @@ def export_markdown_report(summaries: Any, output_path: str):
         "# LLM Evaluation & Benchmark Report",
         f"Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n",
         "## Summary Comparison",
-        "| Model | Pass Rate | Assertions Passed | Avg Generation Speed | Total Latency |",
-        "| :--- | :--- | :--- | :--- | :--- |"
+        "| Model | Questions Solved | Question Pass Rate | Assertions Passed | Avg Generation Speed | Total Latency |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |"
     ]
     for s in summaries:
-        lines.append(f"| **{s['model']}** | {s['pass_rate_pct']}% | {s['passed_assertions']}/{s['total_assertions']} | {s['avg_tokens_per_sec']} tok/s | {s['total_latency_sec']}s |")
+        q_solved = s.get('questions_solved', s.get('passed_cases', 0))
+        q_total = s.get('total_cases', 0)
+        q_pct = s.get('question_pass_rate_pct', s.get('case_pass_rate_pct', 0.0))
+        lines.append(f"| **{s['model']}** | {q_solved}/{q_total} | {q_pct}% | {s['passed_assertions']}/{s['total_assertions']} | {s['avg_tokens_per_sec']} tok/s | {s['total_latency_sec']}s |")
 
     lines.append("\n## Detailed Test Results\n")
     for s in summaries:
@@ -552,16 +606,24 @@ def main():
         help=f"Directory to store timestamped test metrics per model. Default: '{env_metrics_dir}'"
     )
     parser.add_argument(
-        "--output-json", default="test_results.json",
-        help="Path to save latest consolidated JSON results. Default: test_results.json"
+        "--output-json", default=None,
+        help="Optional custom path to save consolidated JSON results. Default: None"
     )
     parser.add_argument(
-        "--output-md", default="test_results.md",
-        help="Path to save latest consolidated Markdown report. Default: test_results.md"
+        "--output-md", default=None,
+        help="Optional custom path to save consolidated Markdown report. Default: None"
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true",
         help="Print full model output responses in console."
+    )
+    parser.add_argument(
+        "--no-warmup", action="store_true",
+        help="Skip pre-warming request before test execution."
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=1200,
+        help="Blanket max generation tokens per request across all questions. Default: 1200"
     )
 
     args = parser.parse_args()
@@ -594,7 +656,7 @@ def main():
 
     all_summaries = []
     for model_name in models:
-        summary = run_evaluation(client, model_name, test_cases, verbose=args.verbose)
+        summary = run_evaluation(client, model_name, test_cases, verbose=args.verbose, warmup=not args.no_warmup, blanket_max_tokens=args.max_tokens)
         all_summaries.append(summary)
 
     # Print comparison table if multiple models were tested
@@ -644,27 +706,29 @@ def main():
         except Exception as e:
             print(f"Warning: Failed to save comparison Markdown: {e}")
 
-    # Also maintain latest consolidated test_results.json and test_results.md at root
+    # Save optional custom output files if explicitly specified via CLI
     if args.output_json:
         try:
             with open(args.output_json, "w", encoding="utf-8") as f:
                 json.dump(all_summaries, f, indent=2)
-        except Exception:
-            pass
+            print(f"Custom JSON saved to: {args.output_json}")
+        except Exception as e:
+            print(f"Warning: Failed to save custom JSON to {args.output_json}: {e}")
 
     if args.output_md:
         try:
             export_markdown_report(all_summaries, args.output_md)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: Failed to save custom Markdown to {args.output_md}: {e}")
 
     # Return non-zero exit code if any model had failing assertions
+    overall_q_failures = sum(s.get("questions_failed", s.get("failed_cases", 0)) for s in all_summaries)
     overall_failures = sum(s["failed_assertions"] for s in all_summaries)
-    if overall_failures > 0:
-        print(f"\n{Colors.YELLOW}Completed with {overall_failures} assertion failure(s).{Colors.RESET}")
+    if overall_failures > 0 or overall_q_failures > 0:
+        print(f"\n{Colors.YELLOW}Completed with {overall_q_failures} unsolved question(s) ({overall_failures} assertion failure(s)).{Colors.RESET}")
         sys.exit(1)
     else:
-        print(f"\n{Colors.GREEN}All assertions passed successfully!{Colors.RESET}")
+        print(f"\n{Colors.GREEN}All questions and assertions passed successfully!{Colors.RESET}")
         sys.exit(0)
 
 

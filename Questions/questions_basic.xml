@@ -6,7 +6,6 @@
         <question>What is 1 + 1? Answer in one short sentence.</question>
         <system_prompt>You are a precise calculator assistant. Be concise.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>50</max_tokens>
         <assertions>
             <!-- Check that answer contains '2' or 'two' (case-insensitive) -->
             <assert type="contains_any" case_sensitive="false">
@@ -14,7 +13,6 @@
                 <expected>two</expected>
             </assert>
             <assert type="not_contains" case_sensitive="false">error</assert>
-            <assert type="max_latency_sec">15.0</assert>
         </assertions>
     </test_case>
 
@@ -24,7 +22,6 @@
         <question>What is the capital city of France?</question>
         <system_prompt>You are a factual knowledge assistant. Give a direct answer.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>50</max_tokens>
         <assertions>
             <assert type="contains" case_sensitive="false">Paris</assert>
             <assert type="not_contains" case_sensitive="false">London</assert>
@@ -38,7 +35,6 @@
         <question>Write a Python function named `is_even` that takes an integer and returns True if it is even, False otherwise.</question>
         <system_prompt>You are an expert Python programmer. Output valid Python code.</system_prompt>
         <temperature>0.1</temperature>
-        <max_tokens>150</max_tokens>
         <assertions>
             <!-- Function name and signature pattern (handles optional parameter and return type annotations) -->
             <assert type="regex">def\s+is_even\s*\([^)]*\).*?:</assert>
@@ -57,14 +53,12 @@
         <question>If all roses are flowers and some flowers fade quickly, can we be certain that all roses fade quickly? Answer Yes or No and briefly explain.</question>
         <system_prompt>You are a formal logic expert. Answer directly.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>100</max_tokens>
         <assertions>
             <assert type="contains_any" case_sensitive="false">
                 <expected>No</expected>
                 <expected>cannot be certain</expected>
                 <expected>not necessarily</expected>
             </assert>
-            <assert type="max_latency_sec">15.0</assert>
         </assertions>
     </test_case>
 
@@ -74,10 +68,65 @@
         <question>What color is the clear sky on a sunny day? Answer with exactly one word.</question>
         <system_prompt>Reply with only one single word. No punctuation, no extra text.</system_prompt>
         <temperature>0.0</temperature>
-        <max_tokens>20</max_tokens>
         <assertions>
             <assert type="contains" case_sensitive="false">blue</assert>
-            <assert type="max_latency_sec">5.0</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 6: Literature Knowledge -->
+    <test_case id="lit-iliad" category="literature">
+        <name>Iliad Character Recognition</name>
+        <question>Name one famous character from Homer's epic poem The Iliad.</question>
+        <system_prompt>Answer concisely with the name of the character.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Achilles</expected>
+                <expected>Hector</expected>
+                <expected>Agamemnon</expected>
+                <expected>Odysseus</expected>
+                <expected>Patroclus</expected>
+                <expected>Paris</expected>
+                <expected>Helen</expected>
+                <expected>Priam</expected>
+                <expected>Ajax</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 7: Code Comprehension (PHP) -->
+    <test_case id="code-explain-php" category="coding_comprehension">
+        <name>PHP Code Explanation (Sum Array)</name>
+        <question>In one sentence, what does this PHP function do? function addAll($array){$ttl=0;foreach($array as $int){$ttl = $ttl+$int;} return $ttl}</question>
+        <system_prompt>Explain what the function does concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>sum</expected>
+                <expected>total</expected>
+                <expected>adds all</expected>
+                <expected>add all</expected>
+                <expected>adds up</expected>
+                <expected>add up</expected>
+                <expected>addition</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">multiply</assert>
+            <assert type="not_contains" case_sensitive="false">average</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 8: Order of Operations Arithmetic -->
+    <test_case id="math-order-ops" category="arithmetic">
+        <name>Order of Operations (BEDMAS)</name>
+        <question>Evaluate (15 * 4 - 12) / 6 + 8 * 2. Answer with only the final number.</question>
+        <system_prompt>Answer with only the single resulting number.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>24</expected>
+                <expected>twenty-four</expected>
+                <expected>twenty four</expected>
+            </assert>
         </assertions>
     </test_case>
 </test_suite>

@@ -45,9 +45,10 @@ EOF
 ollama create "$MODEL" -f /tmp/Modelfile > /dev/null 2>&1
 rm -f /tmp/Modelfile
 
-# 3. Start model in GPU memory (runs until docker stack stops via OLLAMA_KEEP_ALIVE=-1)
-echo "Starting model $MODEL in GPU memory..."
-ollama run "$MODEL" "" > /dev/null 2>&1
+# 3. Start model in GPU memory and run warm-up pass (num_ctx=8192)
+echo "Warming up model $MODEL in GPU memory (num_ctx=8192, SWA buffers & computation graph)..."
+ollama run "$MODEL" "Warmup initialization: verify inference pipeline, Sliding Window Attention buffers, and computation graphs are ready." > /dev/null 2>&1
+
 
 echo "=========================================="
 echo "Model initialization complete!"

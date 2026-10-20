@@ -174,6 +174,42 @@ class MinTokensPerSecAssertion(BaseAssertion):
         return AssertionResult(self.rule_type, passed, msg, expected=f">= {min_tps} tok/s", actual=f"{actual_tps} tok/s")
 
 
+class MinWordsAssertion(BaseAssertion):
+    """Asserts that the output contains at least N words (ensures a sentence/statement was fabricated)."""
+    rule_type = "min_words"
+
+    def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
+        min_words = int(self.expected_values[0]) if self.expected_values else 1
+        words = output.strip().split()
+        count = len(words)
+        passed = count >= min_words
+        msg = f"Word count {count} >= required minimum {min_words}" if passed else f"Fabricated output has only {count} word(s), expected at least {min_words}"
+        return AssertionResult(self.rule_type, passed, msg, expected=f">= {min_words} words", actual=f"{count} words")
+
+
+class NotEmptyAssertion(BaseAssertion):
+    """Asserts that the output is not empty or pure whitespace."""
+    rule_type = "not_empty"
+
+    def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
+        text = output.strip()
+        passed = len(text) > 0
+        msg = "Output is not empty" if passed else "Output is empty (no sentence was fabricated)"
+        return AssertionResult(self.rule_type, passed, msg, expected="non-empty string", actual=f"len: {len(text)}")
+
+
+class MinLengthAssertion(BaseAssertion):
+    """Asserts that the output text meets a minimum character count."""
+    rule_type = "min_length"
+
+    def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
+        min_chars = int(self.expected_values[0]) if self.expected_values else 1
+        actual_len = len(output.strip())
+        passed = actual_len >= min_chars
+        msg = f"Length {actual_len} chars >= limit {min_chars}" if passed else f"Length {actual_len} chars fell short of minimum {min_chars}"
+        return AssertionResult(self.rule_type, passed, msg, expected=f">= {min_chars} chars", actual=f"{actual_len} chars")
+
+
 # ==============================================================================
 # Factory (Open/Closed Principle)
 # ==============================================================================
@@ -206,6 +242,9 @@ AssertionFactory.register("regex", RegexAssertion)
 AssertionFactory.register("exact", ExactAssertion)
 AssertionFactory.register("max_latency_sec", MaxLatencyAssertion)
 AssertionFactory.register("min_tokens_per_sec", MinTokensPerSecAssertion)
+AssertionFactory.register("min_words", MinWordsAssertion)
+AssertionFactory.register("not_empty", NotEmptyAssertion)
+AssertionFactory.register("min_length", MinLengthAssertion)
 
 
 # ==============================================================================

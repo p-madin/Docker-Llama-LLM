@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Paradoxical &amp; Mechanical Classification Edge Cases (Archived)">
+    <!-- 
+      These test cases have been moved out of the active benchmark gauge because they are
+      fundamentally difficult to mechanically classify with text/substring assertions:
+      - Contains premise leakage (e.g. answer is in the prompt premise)
+      - Naive negative substring collisions (e.g. prompt mentions 9.11 and 9.9, or derivation mentions $1.10)
+      - Partial word/numeric collisions (e.g. 'x = 5' matching inside 'x = 50')
+    -->
+
+    <!-- Paradox 1: Prompt Premise Leakage -->
+    <test_case id="reason-widget-rate" category="rate_scaling">
+        <name>Machines and Widgets Rate</name>
+        <question>If it takes 5 machines 5 minutes to make 5 widgets, how many minutes does it take 100 machines to make 100 widgets? State the number of minutes.</question>
+        <system_prompt>You are a logical reasoning assistant. Calculate the rate per machine carefully.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 5 minutes (1 machine makes 1 widget in 5 mins). Trap: 100 minutes or 1 minute -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>5 minutes</expected>
+                <expected>five minutes</expected>
+                <expected>5 min</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">100 minutes</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Paradox 2: Substring Collision on Derivation ('x = 5' vs 'x = 50', trap negation 'costs 10 cents') -->
+    <test_case id="reason-bat-ball" category="cognitive_reflection">
+        <name>Bat and Ball Price Calculation</name>
+        <question>A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost in cents? State the answer in cents.</question>
+        <system_prompt>You are a mathematical reasoning assistant. Set up the arithmetic equation carefully before answering.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 5 cents. Trap: 10 cents (1.10 - 1.00 = 0.10) -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>5 cents</expected>
+                <expected>5¢</expected>
+                <expected>five cents</expected>
+                <expected>0.05</expected>
+                <expected>\boxed{5}</expected>
+                <expected>x = 5</expected>
+                <expected>costs 5</expected>
+                <expected>is 5</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">costs 10 cents</assert>
+            <assert type="not_contains" case_sensitive="false">is 10 cents</assert>
+            <assert type="not_contains" case_sensitive="false">ball is 10</assert>
+            <assert type="not_contains" case_sensitive="false">ball costs 10</assert>
+            <assert type="not_contains" case_sensitive="false">10¢</assert>
+            <assert type="not_contains" case_sensitive="false">ten cents</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Paradox 3: Exact formatting trap on reasoning models (preamble includes $1.10, triggering not_contains 10) -->
+    <test_case id="hard-bat-ball" category="cognitive_reflection">
+        <name>Bat and Ball Math Trap</name>
+        <question>A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How many cents does the ball cost? Answer with only the number of cents.</question>
+        <system_prompt>Answer with only the number. No words, no symbols.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="exact">5</assert>
+            <assert type="not_contains">10</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Paradox 4: Question contains both the correct and incorrect answers (reasoning models compare both) -->
+    <test_case id="hard-decimal-cmp" category="numeric_reasoning">
+        <name>Decimal Comparison (9.11 vs 9.9)</name>
+        <question>Which number is strictly greater: 9.11 or 9.9? Answer with only the number and nothing else.</question>
+        <system_prompt>Reply with only the chosen number. No explanation.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="exact">9.9</assert>
+            <assert type="not_contains">9.11</assert>
+        </assertions>
+    </test_case>
+</test_suite>

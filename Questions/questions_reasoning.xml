@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Reasoning &amp; Deduction Suite">
+    <!-- Test Case 1: Invariant Age Difference -->
+    <test_case id="reason-age-diff" category="temporal_reasoning">
+        <name>Sister Age Invariance</name>
+        <question>When I was 6 years old, my sister was half my age. Now I am 70 years old. How old is my sister? State her age clearly.</question>
+        <system_prompt>You are a logical reasoning assistant. Think carefully before stating the final answer.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 70 - 3 = 67. Trap: 70 / 2 = 35 -->
+            <assert type="contains">67</assert>
+            <assert type="not_contains">35</assert>
+        </assertions>
+    </test_case>
+
+
+    <!-- Test Case 3: Transitive Ordering -->
+    <test_case id="reason-transitive-order" category="transitive_logic">
+        <name>Transitive Weight Comparison</name>
+        <question>There are three boxes: Red, Green, and Blue. The Red box is heavier than the Green box. The Blue box is lighter than the Green box. Which box is the lightest? Name only the color of the lightest box.</question>
+        <system_prompt>You are a deductive reasoning assistant. Deduce the order from heaviest to lightest.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: Blue (Red > Green > Blue). Prohibited: Red, Green as the answer -->
+            <assert type="contains" case_sensitive="false">Blue</assert>
+            <assert type="not_contains" case_sensitive="false">Red is the lightest</assert>
+            <assert type="not_contains" case_sensitive="false">Green is the lightest</assert>
+        </assertions>
+    </test_case>
+
+
+    <!-- Test Case 5: Exponential Doubling Rate -->
+    <test_case id="reason-lily-pads" category="exponential_growth">
+        <name>Lily Pad Lake Doubling Rate</name>
+        <question>In a lake, there is a patch of lily pads. Every day, the patch doubles in size. If it takes 48 days for the patch to cover the entire lake, how many days would it take for the patch to cover half of the lake? State the number of days.</question>
+        <system_prompt>You are a logical reasoning assistant. Work backwards from the full coverage day.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 47 days. Trap: 24 days (48 / 2 = 24) -->
+            <assert type="contains">47</assert>
+            <assert type="not_contains" case_sensitive="false">24 days</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 6: Algebraic Equation - Brick Weight -->
+    <test_case id="reason-brick-weight" category="algebraic_reasoning">
+        <name>Self-Referential Brick Weight</name>
+        <question>A construction brick weighs 1 kilogram plus the weight of half a brick. How many kilograms does one whole brick weigh? State the number of kilograms.</question>
+        <system_prompt>You are an algebraic reasoning assistant. Solve for the weight of the whole brick.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 2 kg (B = 1 + 0.5B => 0.5B = 1 => B = 2). Trap: 1.5 kg (1 + 0.5 = 1.5) -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>2 kg</expected>
+                <expected>2 kilograms</expected>
+                <expected>two kilograms</expected>
+                <expected>two kg</expected>
+                <expected>weighs 2</expected>
+                <expected>weight is 2</expected>
+                <expected>equal to 2</expected>
+                <expected>is 2</expected>
+                <expected>\boxed{2}</expected>
+                <expected>x = 2</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">1.5 kg</assert>
+            <assert type="not_contains" case_sensitive="false">1.5 kilograms</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 7: Round Trip Average Speed (Harmonic Mean) -->
+    <test_case id="reason-average-speed" category="harmonic_mean">
+        <name>Round Trip Average Speed</name>
+        <question>A car travels from Town A to Town B at 60 mph, and returns along the exact same road from Town B to Town A at 20 mph. What is the car's average speed for the entire round trip in mph? State the number in mph.</question>
+        <system_prompt>You are a physics and mathematics assistant. Calculate the harmonic average (total distance divided by total time).</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 30 mph. Trap: 40 mph ((60 + 20) / 2 = 40) -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>30 mph</expected>
+                <expected>30 miles per hour</expected>
+                <expected>is 30</expected>
+                <expected>speed is 30</expected>
+                <expected>average speed of 30</expected>
+                <expected>\boxed{30}</expected>
+                <expected>30</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">is 40 mph</assert>
+            <assert type="not_contains" case_sensitive="false">is 40 miles per hour</assert>
+            <assert type="not_contains" case_sensitive="false">average speed of 40</assert>
+            <assert type="not_contains" case_sensitive="false">\boxed{40}</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 8: Deductive Syllogism Validity -->
+    <test_case id="reason-syllogism" category="deductive_logic">
+        <name>Deductive Syllogism Fallacy</name>
+        <question>Premise 1: All cats are mammals. Premise 2: Some mammals have tails. Can we logically conclude with certainty that all cats have tails? Answer Yes or No and state your conclusion clearly.</question>
+        <system_prompt>You are a formal logic assistant. Analyze whether the conclusion strictly follows from the premises.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: No (cannot conclude). Trap: Yes -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>No</expected>
+                <expected>cannot conclude</expected>
+                <expected>does not follow</expected>
+                <expected>invalid</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Yes, we can conclude</assert>
+            <assert type="not_contains" case_sensitive="false">Yes, it follows</assert>
+            <assert type="not_contains" case_sensitive="false">conclusion is Yes</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 9: Temporal Calendar Reasoning -->
+    <test_case id="reason-calendar-day" category="temporal_reasoning">
+        <name>Temporal Day Calculation</name>
+        <question>If the day before yesterday was Thursday, what day of the week is tomorrow? State only the day of the week.</question>
+        <system_prompt>You are a precise deductive reasoning assistant. Calculate step-by-step: day before yesterday -> yesterday -> today -> tomorrow.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: Sunday (Thu -> Fri -> Sat -> Sun). Traps: Saturday, Friday, Monday -->
+            <assert type="contains" case_sensitive="false">Sunday</assert>
+            <assert type="not_contains" case_sensitive="false">tomorrow is Saturday</assert>
+            <assert type="not_contains" case_sensitive="false">tomorrow is Friday</assert>
+            <assert type="not_contains" case_sensitive="false">tomorrow is Monday</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 10: Simple Probability Ratio -->
+    <test_case id="reason-probability" category="probabilistic_reasoning">
+        <name>Urn Probability Calculation</name>
+        <question>A bag contains 3 red marbles and 7 blue marbles. If you draw one marble at random, what is the probability that it is red? Express your answer as a decimal or percentage.</question>
+        <system_prompt>You are a mathematics assistant. Calculate the ratio of favorable outcomes to total outcomes.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 3 / (3 + 7) = 0.3 or 30%. Trap: 0.7 or 70% or 3/7 -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>0.3</expected>
+                <expected>30%</expected>
+                <expected>3/10</expected>
+                <expected>three tenths</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">0.7</assert>
+            <assert type="not_contains" case_sensitive="false">70%</assert>
+            <assert type="not_contains" case_sensitive="false">3/7</assert>
+        </assertions>
+    </test_case>
+</test_suite>
