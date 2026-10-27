@@ -127,6 +127,28 @@ DDL_STATEMENTS = [
     );
     """,
 
+    # 8. Benchmark Jobs Table (Phase 7 Async Job Queue)
+    """
+    CREATE TABLE IF NOT EXISTS benchmark_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_uuid TEXT UNIQUE NOT NULL,
+        status TEXT NOT NULL, -- 'queued', 'running', 'completed', 'failed', 'aborted'
+        models_json TEXT NOT NULL,
+        suites_json TEXT,
+        temperature REAL DEFAULT 0.0,
+        blanket_max_tokens INTEGER DEFAULT 1200,
+        concurrency INTEGER DEFAULT 1,
+        current_model TEXT,
+        current_test_id TEXT,
+        progress_pct REAL DEFAULT 0.0,
+        result_run_ids TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        error_message TEXT
+    );
+    """,
+
     # Indexes for Analytical Performance
     "CREATE INDEX IF NOT EXISTS idx_questions_suite ON questions(suite_id);",
     "CREATE INDEX IF NOT EXISTS idx_questions_test_id ON questions(test_id);",
@@ -134,7 +156,9 @@ DDL_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_test_results_run ON test_results(run_id);",
     "CREATE INDEX IF NOT EXISTS idx_test_results_model ON test_results(model_id);",
     "CREATE INDEX IF NOT EXISTS idx_test_results_question ON test_results(question_id);",
-    "CREATE INDEX IF NOT EXISTS idx_assertion_results_tr ON assertion_results(test_result_id);"
+    "CREATE INDEX IF NOT EXISTS idx_assertion_results_tr ON assertion_results(test_result_id);",
+    "CREATE INDEX IF NOT EXISTS idx_benchmark_jobs_status ON benchmark_jobs(status);",
+    "CREATE INDEX IF NOT EXISTS idx_benchmark_jobs_uuid ON benchmark_jobs(job_uuid);"
 ]
 
 
@@ -476,7 +500,7 @@ def get_stats(conn: sqlite3.Connection) -> Dict[str, int]:
     """Returns row counts across all relational tables."""
     tables = [
         "models", "benchmark_runs", "test_suites",
-        "questions", "assertions", "test_results", "assertion_results"
+        "questions", "assertions", "test_results", "assertion_results", "benchmark_jobs"
     ]
     counts = {}
     cursor = conn.cursor()
@@ -532,6 +556,130 @@ def get_latest_matrix(conn: sqlite3.Connection, min_questions: int = 10) -> List
     cursor.execute(query, (min_questions,))
     rows = cursor.fetchall()
     return [dict(r) for r in rows]
+
+
+# ==============================================================================
+# Job Queue Persistence (Phase 7)
+# ==============================================================================
+
+def create_job(conn: sqlite3.Connection,
+               models: List[str],
+               suites: Optional[List[str]] = None,
+               temperature: float = 0.0,
+               blanket_max_tokens: int = 1200,
+               concurrency: int = 1,
+               job_uuid: Optional[str] = None) -> int:
+    """Inserts a new benchmark job with status 'queued' and returns its integer ID."""
+    if not job_uuid:
+        job_uuid = f"job-{uuid.uuid4().hex[:8]}"
+    models_json = json.dumps(models)
+    suites_json = json.dumps(suites) if suites else None
+
+    with conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO benchmark_jobs (
+                job_uuid, status, models_json, suites_json,
+                temperature, blanket_max_tokens, concurrency, progress_pct
+            ) VALUES (?, 'queued', ?, ?, ?, ?, ?, 0.0)
+        """, (job_uuid, models_json, suites_json, temperature, blanket_max_tokens, concurrency))
+        return cursor.lastrowid
+
+
+def get_job(conn: sqlite3.Connection, job_id_or_uuid: Any) -> Optional[Dict[str, Any]]:
+    """Fetches a single benchmark job by numeric ID or UUID string."""
+    cursor = conn.cursor()
+    if isinstance(job_id_or_uuid, int) or (isinstance(job_id_or_uuid, str) and job_id_or_uuid.isdigit()):
+        cursor.execute("SELECT * FROM benchmark_jobs WHERE id = ?", (int(job_id_or_uuid),))
+    else:
+        cursor.execute("SELECT * FROM benchmark_jobs WHERE job_uuid = ?", (str(job_id_or_uuid),))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    try:
+        d["models"] = json.loads(d["models_json"])
+    except Exception:
+        d["models"] = []
+    try:
+        d["suites"] = json.loads(d["suites_json"]) if d.get("suites_json") else []
+    except Exception:
+        d["suites"] = []
+    try:
+        d["result_runs"] = json.loads(d["result_run_ids"]) if d.get("result_run_ids") else []
+    except Exception:
+        d["result_runs"] = []
+    return d
+
+
+def list_jobs(conn: sqlite3.Connection, limit: int = 50) -> List[Dict[str, Any]]:
+    """Returns the most recent benchmark jobs."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM benchmark_jobs
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    jobs = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["models"] = json.loads(d["models_json"])
+        except Exception:
+            d["models"] = []
+        try:
+            d["suites"] = json.loads(d["suites_json"]) if d.get("suites_json") else []
+        except Exception:
+            d["suites"] = []
+        try:
+            d["result_runs"] = json.loads(d["result_run_ids"]) if d.get("result_run_ids") else []
+        except Exception:
+            d["result_runs"] = []
+        jobs.append(d)
+    return jobs
+
+
+def update_job_status(conn: sqlite3.Connection,
+                      job_id: int,
+                      status: str,
+                      error_message: Optional[str] = None,
+                      result_run_ids: Optional[List[int]] = None):
+    """Updates job status, start/completion timestamps, and error messages."""
+    with conn:
+        cursor = conn.cursor()
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        if status == "running":
+            cursor.execute("""
+                UPDATE benchmark_jobs
+                SET status = ?, started_at = COALESCE(started_at, ?)
+                WHERE id = ?
+            """, (status, now, job_id))
+        elif status in ("completed", "failed", "aborted"):
+            runs_json = json.dumps(result_run_ids) if result_run_ids is not None else None
+            cursor.execute("""
+                UPDATE benchmark_jobs
+                SET status = ?, completed_at = ?, error_message = ?,
+                    result_run_ids = COALESCE(?, result_run_ids)
+                WHERE id = ?
+            """, (status, now, error_message, runs_json, job_id))
+        else:
+            cursor.execute("UPDATE benchmark_jobs SET status = ? WHERE id = ?", (status, job_id))
+
+
+def update_job_progress(conn: sqlite3.Connection,
+                        job_id: int,
+                        current_model: str,
+                        current_test_id: str,
+                        progress_pct: float):
+    """Updates live progress metrics for an executing benchmark job."""
+    with conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE benchmark_jobs
+            SET current_model = ?, current_test_id = ?, progress_pct = ?
+            WHERE id = ?
+        """, (current_model, current_test_id, round(progress_pct, 1), job_id))
 
 
 # ==============================================================================

@@ -18,7 +18,12 @@ const state = {
     },
     diffSelectedModels: new Set(['llama3.2', 'qwen2.5-coder:3b', 'gemini-3.1-flash-lite']),
     currentEditingQId: null,
-    isNewQuestion: false
+    isNewQuestion: false,
+    runner: {
+        activeJobId: null,
+        eventSource: null,
+        autoScroll: true
+    }
 };
 
 // ==============================================================================
@@ -32,12 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initDiffEvents();
     initCrudEvents();
     initSandboxEvents();
+    initRunnerEvents();
     initDrawer();
 
     // Initial data fetch
     fetchHealth();
     fetchMatrix();
     fetchQuestions();
+    checkActiveJobs();
 });
 
 // ==============================================================================
@@ -70,6 +77,9 @@ function initNavigation() {
                 renderCrudSidebar();
             } else if (viewId === 'sandbox-view') {
                 populateSandboxPresets();
+            } else if (viewId === 'runner-view') {
+                populateRunnerOptions();
+                fetchJobsList();
             }
         });
     });
@@ -1062,4 +1072,401 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+// ==============================================================================
+// Phase 7: Benchmark Runner & Real-Time Telemetry Client
+// ==============================================================================
+
+function initRunnerEvents() {
+    const form = document.getElementById('benchmark-launch-form');
+    if (form) {
+        form.addEventListener('submit', handleLaunchBenchmark);
+    }
+
+    // Quick select buttons
+    const btnGpu = document.getElementById('btn-select-gpu-models');
+    if (btnGpu) {
+        btnGpu.addEventListener('click', () => {
+            const gpuModels = ['llama3.2', 'qwen2.5-coder:3b', 'smollm2:latest'];
+            document.querySelectorAll('#runner-models-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = gpuModels.includes(cb.value);
+                cb.closest('.model-chip-label')?.classList.toggle('checked', cb.checked);
+            });
+        });
+    }
+
+    const btnAllModels = document.getElementById('btn-select-all-models');
+    if (btnAllModels) {
+        btnAllModels.addEventListener('click', () => {
+            document.querySelectorAll('#runner-models-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                cb.closest('.model-chip-label')?.classList.add('checked');
+            });
+        });
+    }
+
+    const btnClearModels = document.getElementById('btn-clear-models');
+    if (btnClearModels) {
+        btnClearModels.addEventListener('click', () => {
+            document.querySelectorAll('#runner-models-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+                cb.closest('.model-chip-label')?.classList.remove('checked');
+            });
+        });
+    }
+
+    const btnAllSuites = document.getElementById('btn-select-all-suites');
+    if (btnAllSuites) {
+        btnAllSuites.addEventListener('click', () => {
+            document.querySelectorAll('#runner-suites-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                cb.closest('.suite-chip-label')?.classList.add('checked');
+            });
+        });
+    }
+
+    const btnClearSuites = document.getElementById('btn-clear-suites');
+    if (btnClearSuites) {
+        btnClearSuites.addEventListener('click', () => {
+            document.querySelectorAll('#runner-suites-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+                cb.closest('.suite-chip-label')?.classList.remove('checked');
+            });
+        });
+    }
+
+    const btnAbort = document.getElementById('btn-abort-job');
+    if (btnAbort) {
+        btnAbort.addEventListener('click', handleAbortJob);
+    }
+
+    const btnClearConsole = document.getElementById('btn-clear-console');
+    if (btnClearConsole) {
+        btnClearConsole.addEventListener('click', () => {
+            const logs = document.getElementById('runner-terminal-logs');
+            if (logs) logs.innerHTML = '<div class="term-line info">[SYS] Console cleared.</div>';
+        });
+    }
+
+    const chkAutoscroll = document.getElementById('chk-autoscroll');
+    if (chkAutoscroll) {
+        chkAutoscroll.addEventListener('change', (e) => {
+            state.runner.autoScroll = e.target.checked;
+        });
+    }
+
+    const btnRefreshJobs = document.getElementById('btn-refresh-jobs');
+    if (btnRefreshJobs) {
+        btnRefreshJobs.addEventListener('click', fetchJobsList);
+    }
+}
+
+async function populateRunnerOptions() {
+    const modelsContainer = document.getElementById('runner-models-container');
+    const suitesContainer = document.getElementById('runner-suites-container');
+
+    // Populate models
+    if (modelsContainer && modelsContainer.children.length === 0) {
+        let modelsList = [];
+        try {
+            const res = await fetch('/api/models');
+            if (res.ok) {
+                const data = await res.json();
+                modelsList = data.models?.map(m => m.name) || [];
+            }
+        } catch (_) {}
+
+        if (modelsList.length === 0) {
+            modelsList = ['llama3.2', 'qwen2.5-coder:3b', 'smollm2:latest', 'deepseek-r1:1.5b', 'gemma3:1b', 'phi3:mini', 'gemini-2.0-flash'];
+        }
+
+        const defaultSelected = new Set(['llama3.2', 'qwen2.5-coder:3b']);
+        modelsContainer.innerHTML = modelsList.map(m => {
+            const isChecked = defaultSelected.has(m);
+            return `
+                <label class="model-chip-label ${isChecked ? 'checked' : ''}">
+                    <input type="checkbox" value="${escapeHtml(m)}" ${isChecked ? 'checked' : ''} onchange="this.closest('.model-chip-label').classList.toggle('checked', this.checked)">
+                    <span>${escapeHtml(m)}</span>
+                </label>
+            `;
+        }).join('');
+    }
+
+    // Populate suites
+    if (suitesContainer && suitesContainer.children.length === 0) {
+        try {
+            const res = await fetch('/api/suites');
+            if (res.ok) {
+                const data = await res.json();
+                const suites = data.suites || [];
+                suitesContainer.innerHTML = suites.map(s => {
+                    const filename = s.file_path ? s.file_path.split(/[\/\\]/).pop() : s.name;
+                    return `
+                        <label class="suite-chip-label checked">
+                            <input type="checkbox" value="${escapeHtml(filename)}" checked onchange="this.closest('.suite-chip-label').classList.toggle('checked', this.checked)">
+                            <span>${escapeHtml(s.name)} <small>(${s.question_count})</small></span>
+                        </label>
+                    `;
+                }).join('');
+            }
+        } catch (_) {}
+    }
+}
+
+async function handleLaunchBenchmark(e) {
+    if (e) e.preventDefault();
+
+    const selectedModels = Array.from(document.querySelectorAll('#runner-models-container input[type="checkbox"]:checked')).map(cb => cb.value);
+    if (selectedModels.length === 0) {
+        showToast('Please select at least one target model.', 'error');
+        return;
+    }
+
+    const allSuiteCheckboxes = Array.from(document.querySelectorAll('#runner-suites-container input[type="checkbox"]'));
+    const checkedSuites = allSuiteCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
+    // If all suites are checked, pass null to run the full question bank
+    const suitesPayload = (checkedSuites.length === allSuiteCheckboxes.length || checkedSuites.length === 0) ? null : checkedSuites;
+
+    const temperature = parseFloat(document.getElementById('runner-temperature').value) || 0.0;
+    const maxTokens = parseInt(document.getElementById('runner-max-tokens').value) || 1200;
+
+    const btnLaunch = document.getElementById('btn-start-benchmark');
+    btnLaunch.disabled = true;
+
+    try {
+        appendRunnerLog(`[DISPATCH] Submitting non-blocking benchmark job (${selectedModels.join(', ')})...`, 'info');
+
+        const res = await fetch('/api/benchmark/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                models: selectedModels,
+                suites: suitesPayload,
+                temperature: temperature,
+                max_tokens: maxTokens
+            })
+        });
+
+        if (res.status === 202) {
+            const data = await res.json();
+            showToast(`Job #${data.job_id} accepted! Initiating real-time telemetry...`);
+            appendRunnerLog(`[ACCEPTED] Job #${data.job_id} (${data.job_uuid}) registered with status: queued.`, 'info');
+            connectJobStream(data.job_id);
+            fetchJobsList();
+        } else {
+            const err = await res.json();
+            throw new Error(err.error || `HTTP ${res.status}`);
+        }
+    } catch (err) {
+        showToast(`Failed to launch benchmark: ${err.message}`, 'error');
+        appendRunnerLog(`[ERROR] Dispatch failed: ${err.message}`, 'fail');
+        btnLaunch.disabled = false;
+    }
+}
+
+async function handleAbortJob() {
+    const jobId = state.runner.activeJobId;
+    if (!jobId) return;
+
+    const btnAbort = document.getElementById('btn-abort-job');
+    btnAbort.disabled = true;
+    appendRunnerLog(`[ABORT] Dispatching cancellation signal for Job #${jobId}...`, 'warn');
+
+    try {
+        const res = await fetch(`/api/jobs/${jobId}/abort`, { method: 'POST' });
+        if (res.ok) {
+            showToast(`Cancellation requested for Job #${jobId}`);
+        }
+    } catch (err) {
+        showToast(`Abort request failed: ${err.message}`, 'error');
+    }
+}
+
+function connectJobStream(jobId) {
+    if (state.runner.eventSource) {
+        state.runner.eventSource.close();
+        state.runner.eventSource = null;
+    }
+
+    state.runner.activeJobId = jobId;
+
+    // Update UI headers
+    document.getElementById('telemetry-job-title').textContent = `Job #${jobId} Live Telemetry`;
+    const badge = document.getElementById('telemetry-status-badge');
+    badge.className = 'job-badge badge-running';
+    badge.textContent = 'Running';
+
+    const btnAbort = document.getElementById('btn-abort-job');
+    btnAbort.style.display = 'inline-flex';
+    btnAbort.disabled = false;
+
+    const btnLaunch = document.getElementById('btn-start-benchmark');
+    btnLaunch.disabled = true;
+
+    const es = new EventSource(`/api/jobs/${jobId}/stream`);
+    state.runner.eventSource = es;
+
+    es.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handleJobEvent(data);
+        } catch (_) {}
+    };
+
+    es.onerror = () => {
+        // Stream ended or connection lost
+        es.close();
+        state.runner.eventSource = null;
+    };
+}
+
+function handleJobEvent(data) {
+    const type = data.type;
+
+    if (type === 'job_start') {
+        appendRunnerLog(`[JOB START] Initialized Job #${data.job_id} across ${data.total_models} model(s): ${data.models.join(', ')}`, 'info', data.timestamp);
+    } else if (type === 'model_start') {
+        document.getElementById('gauge-active-model').textContent = data.model;
+        appendRunnerLog(`[MODEL START] (${data.model_index}/${data.total_models}) Ingesting model '${data.model}'...`, 'swap', data.timestamp);
+    } else if (type === 'test_result') {
+        // Update progress bar
+        const pct = data.progress_pct || 0;
+        document.getElementById('runner-progress-fill').style.width = `${pct}%`;
+        document.getElementById('runner-progress-pct').textContent = `${pct.toFixed(1)}%`;
+        document.getElementById('runner-progress-detail').textContent = `${data.model} | [${data.test_id}] ${data.name} (${data.completed_units}/${data.total_work_units})`;
+
+        // Update gauges
+        document.getElementById('gauge-test-id').textContent = data.test_id;
+        document.getElementById('gauge-speed').innerHTML = `${data.speed_tok_s.toFixed(1)} <small>tok/s</small>`;
+        document.getElementById('gauge-latency').innerHTML = `${data.latency_sec.toFixed(2)} <small>s</small>`;
+
+        const statusTag = data.passed ? '<span style="color:var(--emerald-400)">[PASS]</span>' : '<span style="color:var(--rose-400)">[FAIL]</span>';
+        const logHtml = `${statusTag} <strong>${escapeHtml(data.model)}</strong> ❯ [${escapeHtml(data.test_id)}] ${escapeHtml(data.name)} &bull; ${data.speed_tok_s.toFixed(1)} tok/s &bull; ${data.latency_sec.toFixed(2)}s`;
+        appendRunnerLog(logHtml, data.passed ? 'pass' : 'fail', data.timestamp);
+    } else if (type === 'model_done') {
+        appendRunnerLog(`[MODEL COMPLETE] '${data.model}' Solved: ${data.questions_solved}/${data.total_questions} (${data.pass_rate_pct}%) | Avg: ${data.avg_speed} tok/s | Time: ${data.total_latency_sec}s (Run #${data.run_id})`, 'info', data.timestamp);
+    } else if (type === 'log') {
+        const cls = data.level === 'warn' ? 'warn' : 'info';
+        appendRunnerLog(`[SYS] ${escapeHtml(data.message)}`, cls, data.timestamp);
+    } else if (type === 'job_done') {
+        document.getElementById('runner-progress-fill').style.width = '100%';
+        document.getElementById('runner-progress-pct').textContent = '100.0%';
+        document.getElementById('runner-progress-detail').textContent = `Benchmark completed successfully across ${data.total_models} model(s)!`;
+
+        const badge = document.getElementById('telemetry-status-badge');
+        badge.className = 'job-badge badge-completed';
+        badge.textContent = 'Completed';
+
+        document.getElementById('btn-abort-job').style.display = 'none';
+        document.getElementById('btn-start-benchmark').disabled = false;
+
+        appendRunnerLog(`[JOB COMPLETE] Execution finished in ${data.elapsed_sec}s! Created run(s): ${data.run_ids.join(', ')}`, 'done', data.timestamp);
+        showToast('Benchmark complete! Auto-refreshing Heatmap Matrix...');
+
+        if (state.runner.eventSource) {
+            state.runner.eventSource.close();
+            state.runner.eventSource = null;
+        }
+
+        // Auto-refresh matrix data and job table
+        fetchMatrix();
+        fetchJobsList();
+    } else if (type === 'aborted') {
+        const badge = document.getElementById('telemetry-status-badge');
+        badge.className = 'job-badge badge-aborted';
+        badge.textContent = 'Aborted';
+
+        document.getElementById('btn-abort-job').style.display = 'none';
+        document.getElementById('btn-start-benchmark').disabled = false;
+        appendRunnerLog(`[ABORTED] Job run canceled by user.`, 'warn', data.timestamp);
+
+        if (state.runner.eventSource) {
+            state.runner.eventSource.close();
+            state.runner.eventSource = null;
+        }
+        fetchJobsList();
+    } else if (type === 'job_error') {
+        const badge = document.getElementById('telemetry-status-badge');
+        badge.className = 'job-badge badge-failed';
+        badge.textContent = 'Failed';
+
+        document.getElementById('btn-abort-job').style.display = 'none';
+        document.getElementById('btn-start-benchmark').disabled = false;
+        appendRunnerLog(`[ERROR] Job terminated with error: ${escapeHtml(data.error)}`, 'fail', data.timestamp);
+
+        if (state.runner.eventSource) {
+            state.runner.eventSource.close();
+            state.runner.eventSource = null;
+        }
+        fetchJobsList();
+    }
+}
+
+function appendRunnerLog(htmlContent, type = 'info', timestamp = null) {
+    const logs = document.getElementById('runner-terminal-logs');
+    if (!logs) return;
+
+    const timeStr = timestamp || (new Date()).toLocaleTimeString();
+    const line = document.createElement('div');
+    line.className = `term-line ${type}`;
+    line.innerHTML = `<span class="term-time">[${timeStr}]</span> <span>${htmlContent}</span>`;
+    logs.appendChild(line);
+
+    if (state.runner.autoScroll) {
+        logs.scrollTop = logs.scrollHeight;
+    }
+}
+
+async function fetchJobsList() {
+    const tbody = document.getElementById('jobs-table-body');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch('/api/jobs');
+        if (!res.ok) return;
+        const data = await res.json();
+        const jobs = data.jobs || [];
+
+        if (jobs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center" style="padding: 1.5rem;">No benchmark jobs recorded yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = jobs.map(j => {
+            let statusBadge = `<span class="job-badge badge-${j.status}">${j.status}</span>`;
+            let modelsList = (j.models || []).map(m => `<span class="badge" style="font-size:0.7rem;margin:0.1rem;">${escapeHtml(m)}</span>`).join('');
+            let suitesStr = (j.suites && j.suites.length > 0) ? `${j.suites.length} suite(s)` : 'All Suites';
+
+            return `
+                <tr>
+                    <td><strong>#${j.id}</strong> <small class="text-muted font-mono">${j.job_uuid}</small></td>
+                    <td>${statusBadge}</td>
+                    <td>${modelsList}</td>
+                    <td>${escapeHtml(suitesStr)}</td>
+                    <td>
+                        <div style="font-family:var(--font-mono);font-size:0.8rem;">${(j.progress_pct || 0).toFixed(1)}%</div>
+                    </td>
+                    <td class="text-muted" style="font-size:0.75rem;">${j.started_at || j.created_at}</td>
+                    <td class="text-muted" style="font-size:0.75rem;">${j.completed_at || '--'}</td>
+                    <td>
+                        <button type="button" class="btn-text-action" onclick="connectJobStream(${j.id})">
+                            ${j.status === 'running' ? 'Live Stream' : 'View Logs'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (_) {}
+}
+
+async function checkActiveJobs() {
+    try {
+        const res = await fetch('/api/jobs');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.active_job_id) {
+            connectJobStream(data.active_job_id);
+        }
+    } catch (_) {}
 }

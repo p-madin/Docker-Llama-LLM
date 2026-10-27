@@ -21,6 +21,8 @@ import urllib.error
 import sqlite3
 import argparse
 import socketserver
+import queue
+import threading
 import xml.etree.ElementTree as ET
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any, List, Optional, Tuple
@@ -45,13 +47,20 @@ load_env_file()
 
 # Framework imports
 import benchmark_store
-from modelAssertion import ModelAssertion, AssertionFactory, BaseAssertion
-from testLLM import LLMClient
+from modelAssertion import ModelAssertion, AssertionFactory, BaseAssertion, AssertionResult
+from testLLM import (
+    LLMClient,
+    load_all_questions,
+    export_markdown_report,
+    sanitize_filename,
+    TestCase
+)
 
 DEFAULT_DB_PATH = os.environ.get("DB_PATH", "benchmark.db")
 DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 QUESTIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Questions")
+METRICS_DIR = os.environ.get("METRICS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "Test metrics"))
 
 
 def get_db(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -59,6 +68,417 @@ def get_db(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+class BenchmarkJobWorker:
+    """
+    Asynchronous in-container background execution worker (Phase 7).
+    Executes benchmark jobs off the main HTTP thread, manages Ollama VRAM dynamically,
+    persists results to SQLite and disk, and broadcasts real-time telemetry over SSE.
+    """
+
+    def __init__(self, db_path: str = DEFAULT_DB_PATH, metrics_dir: str = METRICS_DIR):
+        self.db_path = db_path
+        self.metrics_dir = metrics_dir
+        self.job_queue: queue.Queue = queue.Queue()
+        self.abort_flags: Dict[int, bool] = {}
+        self.subscribers: Dict[int, List[queue.Queue]] = {}
+        self.event_backlogs: Dict[int, List[Dict[str, Any]]] = {}
+        self.lock = threading.Lock()
+        self.active_job_id: Optional[int] = None
+        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker_thread.start()
+
+    def enqueue_job(self, job_id: int):
+        """Enqueues a job ID for background processing."""
+        self.abort_flags[job_id] = False
+        self.job_queue.put(job_id)
+
+    def request_abort(self, job_id: int) -> bool:
+        """Flags an executing or queued job to abort immediately."""
+        self.abort_flags[job_id] = True
+        self.broadcast(job_id, {
+            "type": "log",
+            "level": "warn",
+            "message": f"Abort requested for Job #{job_id}."
+        })
+        return True
+
+    def subscribe(self, job_id: int) -> Tuple[queue.Queue, List[Dict[str, Any]]]:
+        """Registers an SSE listener for job events and returns (subscriber_queue, backlog)."""
+        q = queue.Queue()
+        with self.lock:
+            if job_id not in self.subscribers:
+                self.subscribers[job_id] = []
+            self.subscribers[job_id].append(q)
+            backlog = list(self.event_backlogs.get(job_id, []))
+        return q, backlog
+
+    def unsubscribe(self, job_id: int, q: queue.Queue):
+        """Removes an SSE subscriber queue."""
+        with self.lock:
+            if job_id in self.subscribers and q in self.subscribers[job_id]:
+                self.subscribers[job_id].remove(q)
+
+    def broadcast(self, job_id: int, event: Dict[str, Any]):
+        """Pushes an event payload to all active SSE subscribers and appends to job backlog."""
+        event["timestamp"] = time.strftime("%H:%M:%S")
+        with self.lock:
+            if job_id not in self.event_backlogs:
+                self.event_backlogs[job_id] = []
+            self.event_backlogs[job_id].append(event)
+            if len(self.event_backlogs[job_id]) > 1000:
+                self.event_backlogs[job_id].pop(0)
+
+            subs = list(self.subscribers.get(job_id, []))
+        for q in subs:
+            try:
+                q.put_nowait(event)
+            except Exception:
+                pass
+
+    def evict_ollama_model(self, client: LLMClient, model_name: str):
+        """Evicts model from GPU VRAM immediately using Ollama's keep_alive: 0 parameter."""
+        if client.is_gemini(model_name):
+            return
+        try:
+            payload = json.dumps({"model": model_name, "keep_alive": 0, "stream": False}).encode("utf-8")
+            req = urllib.request.Request(
+                f"{client.host}/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as res:
+                res.read()
+        except Exception:
+            pass
+
+    def _append_summary_md(self, summaries: List[Dict[str, Any]]):
+        """Appends finished benchmark run rows to Test metrics/Summary.md."""
+        try:
+            os.makedirs(self.metrics_dir, exist_ok=True)
+            summary_md_path = os.path.join(self.metrics_dir, "Summary.md")
+            header = (
+                "## Summary Comparison\n"
+                "| Model | Questions Solved | Assertions Passed | Avg Generation Speed | Total Latency (Inference) | Total Cycle Time (Docker) |\n"
+                "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+            )
+            if not os.path.isfile(summary_md_path):
+                with open(summary_md_path, "w", encoding="utf-8") as f:
+                    f.write(header)
+
+            with open(summary_md_path, "a", encoding="utf-8") as f:
+                for s in summaries:
+                    q_solved = s.get("questions_solved", s.get("passed_cases", 0))
+                    q_total = s.get("total_questions", s.get("total_cases", 0))
+                    q_pct = s.get("question_pass_rate_pct", 0.0)
+                    a_passed = s.get("passed_assertions", 0)
+                    a_total = s.get("total_assertions", 0)
+                    a_pct = s.get("assertion_pass_rate_pct", 0.0)
+                    speed = s.get("avg_tokens_per_sec", 0.0)
+                    lat = s.get("total_latency_sec", 0.0)
+                    row = f"| **{s['model']}** | {q_solved}/{q_total} ({q_pct}%) | {a_passed}/{a_total} ({a_pct}%) | {speed} tok/s | {lat}s | In-Container (Worker) |\n"
+                    f.write(row)
+        except Exception as e:
+            print(f"[WORKER] Failed to append to Summary.md: {e}", file=sys.stderr)
+
+    def _worker_loop(self):
+        """Continuously pulls and executes benchmark jobs from queue."""
+        while True:
+            job_id = self.job_queue.get()
+            try:
+                self.active_job_id = job_id
+                self._execute_job(job_id)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                conn = get_db(self.db_path)
+                with conn:
+                    benchmark_store.update_job_status(conn, job_id, "failed", error_message=str(e))
+                self.broadcast(job_id, {"type": "job_error", "job_id": job_id, "error": str(e)})
+            finally:
+                self.active_job_id = None
+                self.job_queue.task_done()
+
+    def _execute_job(self, job_id: int):
+        """Executes a single benchmark job end-to-end."""
+        conn = get_db(self.db_path)
+        job = benchmark_store.get_job(conn, job_id)
+        if not job:
+            return
+
+        if self.abort_flags.get(job_id):
+            benchmark_store.update_job_status(conn, job_id, "aborted", error_message="Aborted before starting")
+            self.broadcast(job_id, {"type": "aborted", "job_id": job_id})
+            return
+
+        # Mark running
+        benchmark_store.update_job_status(conn, job_id, "running")
+        models = job.get("models", [])
+        suites = job.get("suites", [])
+        temperature = float(job.get("temperature", 0.0))
+        blanket_max_tokens = int(job.get("blanket_max_tokens", 1200))
+
+        self.broadcast(job_id, {
+            "type": "job_start",
+            "job_id": job_id,
+            "job_uuid": job["job_uuid"],
+            "models": models,
+            "suites": suites,
+            "total_models": len(models)
+        })
+
+        # Load question bank
+        all_cases, _ = load_all_questions(os.path.join(QUESTIONS_DIR, "*.xml"))
+        if suites:
+            suite_filter = {s.lower() for s in suites}
+            test_cases = [
+                tc for tc in all_cases
+                if any(sf in tc.source_file.lower() or sf in tc.category.lower() for sf in suite_filter)
+            ]
+        else:
+            test_cases = all_cases
+
+        if not test_cases:
+            msg = "No test questions matched the requested suites or filters."
+            benchmark_store.update_job_status(conn, job_id, "failed", error_message=msg)
+            self.broadcast(job_id, {"type": "job_error", "job_id": job_id, "error": msg})
+            return
+
+        total_work_units = len(models) * len(test_cases)
+        completed_units = 0
+        created_run_ids: List[int] = []
+        all_summaries: List[Dict[str, Any]] = []
+        job_start_time = time.perf_counter()
+
+        client = LLMClient(
+            host=DEFAULT_OLLAMA_URL,
+            timeout=120,
+            gemini_api_key=os.environ.get("GEMINI_API_KEY", "")
+        )
+
+        for model_idx, model_name in enumerate(models):
+            if self.abort_flags.get(job_id):
+                benchmark_store.update_job_status(conn, job_id, "aborted", error_message="Job aborted by user", result_run_ids=created_run_ids)
+                self.broadcast(job_id, {"type": "aborted", "job_id": job_id})
+                return
+
+            self.broadcast(job_id, {
+                "type": "model_start",
+                "job_id": job_id,
+                "model": model_name,
+                "model_index": model_idx + 1,
+                "total_models": len(models),
+                "total_questions": len(test_cases)
+            })
+
+            # Pre-warm / load into VRAM
+            if not client.is_gemini(model_name):
+                self.broadcast(job_id, {
+                    "type": "log",
+                    "level": "info",
+                    "message": f"Pre-loading '{model_name}' into GPU VRAM (keep_alive: -1)..."
+                })
+                try:
+                    payload = json.dumps({"model": model_name, "keep_alive": -1, "stream": False}).encode("utf-8")
+                    req = urllib.request.Request(
+                        f"{client.host}/api/generate",
+                        data=payload,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    with urllib.request.urlopen(req, timeout=30) as res:
+                        res.read()
+                except Exception:
+                    pass
+
+            # Model evaluation loop
+            cases_results = []
+            total_assertions = 0
+            passed_assertions = 0
+            total_latency = 0.0
+            total_tokens = 0
+
+            for q_idx, tc in enumerate(test_cases):
+                if self.abort_flags.get(job_id):
+                    benchmark_store.update_job_status(conn, job_id, "aborted", error_message="Job aborted by user", result_run_ids=created_run_ids)
+                    self.broadcast(job_id, {"type": "aborted", "job_id": job_id})
+                    return
+
+                q_temp = tc.temperature if tc.temperature is not None else temperature
+                q_max_tok = tc.max_tokens if tc.max_tokens else blanket_max_tokens
+
+                try:
+                    resp = client.send_chat(
+                        model=model_name,
+                        question=tc.question,
+                        system_prompt=tc.system_prompt,
+                        temperature=q_temp,
+                        max_tokens=q_max_tok
+                    )
+                except Exception as e:
+                    resp = {
+                        "content": "",
+                        "thinking": "",
+                        "metrics": {"error": str(e), "latency_sec": 0.0, "eval_tokens_per_sec": 0.0}
+                    }
+
+                final_content = resp.get("content", "")
+                thinking = resp.get("thinking", "")
+                metrics = resp.get("metrics", {})
+                full_output = f"<think>\n{thinking.strip()}\n</think>\n\n{final_content.strip()}" if thinking else final_content
+
+                # CoT strict evaluation & stall-detection
+                if thinking and not final_content.strip():
+                    case_passed = False
+                    raw_results = [
+                        AssertionResult(
+                            rule_type="response_delivered",
+                            passed=False,
+                            message="Model failed to deliver an answer (truncated or halted in <think> phase)"
+                        )
+                    ]
+                    total_assertions += 1
+                else:
+                    eval_target = final_content if thinking else (final_content if final_content else full_output)
+                    raw_results = tc.assertions.evaluate(eval_target, metrics)
+                    total_assertions += len(raw_results)
+                    passed_assertions += sum(1 for r in raw_results if r.passed)
+                    case_passed = tc.assertions.is_all_passed(raw_results)
+
+                assertion_dicts = [r.to_dict() for r in raw_results]
+
+                lat_sec = metrics.get("latency_sec", 0.0)
+                tps = metrics.get("eval_tokens_per_sec", 0.0)
+                c_tok = metrics.get("completion_tokens", 0)
+                p_tok = metrics.get("prompt_tokens", 0)
+
+                total_latency += lat_sec
+                total_tokens += c_tok
+
+                completed_units += 1
+                progress_pct = (completed_units / total_work_units) * 100.0
+                benchmark_store.update_job_progress(conn, job_id, model_name, tc.test_id, progress_pct)
+
+                cases_results.append({
+                    "test_id": tc.test_id,
+                    "name": tc.name,
+                    "tier": tc.tier,
+                    "category": tc.category,
+                    "difficulty": tc.difficulty,
+                    "model": model_name,
+                    "question": tc.question,
+                    "output": full_output,
+                    "metrics": metrics,
+                    "case_passed": case_passed,
+                    "assertions": assertion_dicts
+                })
+
+                self.broadcast(job_id, {
+                    "type": "test_result",
+                    "job_id": job_id,
+                    "model": model_name,
+                    "test_id": tc.test_id,
+                    "name": tc.name,
+                    "tier": tc.tier,
+                    "category": tc.category,
+                    "passed": case_passed,
+                    "latency_sec": lat_sec,
+                    "speed_tok_s": tps,
+                    "prompt_tokens": p_tok,
+                    "completion_tokens": c_tok,
+                    "assertions": assertion_dicts,
+                    "output_preview": (final_content or full_output).strip()[:100],
+                    "progress_pct": round(progress_pct, 1),
+                    "completed_units": completed_units,
+                    "total_work_units": total_work_units,
+                    "question_index": q_idx + 1,
+                    "total_questions": len(test_cases)
+                })
+
+            # Calculate model summary
+            passed_cases = sum(1 for r in cases_results if r["case_passed"])
+            q_pass_rate = (passed_cases / len(test_cases) * 100) if test_cases else 0.0
+            a_pass_rate = (passed_assertions / total_assertions * 100) if total_assertions > 0 else 0.0
+            avg_speed = (total_tokens / total_latency) if total_latency > 0 else 0.0
+
+            summary = {
+                "model": model_name,
+                "endpoint": "https://generativelanguage.googleapis.com" if client.is_gemini(model_name) else client.host,
+                "total_questions": len(test_cases),
+                "questions_solved": passed_cases,
+                "questions_failed": len(test_cases) - passed_cases,
+                "question_pass_rate_pct": round(q_pass_rate, 1),
+                "total_cases": len(test_cases),
+                "passed_cases": passed_cases,
+                "failed_cases": len(test_cases) - passed_cases,
+                "case_pass_rate_pct": round(q_pass_rate, 1),
+                "total_assertions": total_assertions,
+                "passed_assertions": passed_assertions,
+                "failed_assertions": total_assertions - passed_assertions,
+                "pass_rate_pct": round(a_pass_rate, 1),
+                "assertion_pass_rate_pct": round(a_pass_rate, 1),
+                "total_latency_sec": round(total_latency, 2),
+                "total_tokens_generated": total_tokens,
+                "avg_tokens_per_sec": round(avg_speed, 2),
+                "cases": cases_results
+            }
+            all_summaries.append(summary)
+
+            # Persist model run to SQLite
+            run_id = benchmark_store.record_full_summary(conn, summary)
+            created_run_ids.append(run_id)
+
+            # Save report files to Test metrics/<model>/<timestamp>
+            ts = time.strftime("%Y-%m-%d_%H-%M-%S")
+            safe_model = sanitize_filename(model_name)
+            model_out_dir = os.path.join(self.metrics_dir, safe_model)
+            os.makedirs(model_out_dir, exist_ok=True)
+
+            try:
+                with open(os.path.join(model_out_dir, f"{ts}_out.json"), "w", encoding="utf-8") as f:
+                    json.dump(summary, f, indent=2)
+                export_markdown_report([summary], os.path.join(model_out_dir, f"{ts}_out.md"))
+            except Exception as e:
+                print(f"[WORKER] Failed to write report files: {e}", file=sys.stderr)
+
+            # Evict model from GPU memory to free VRAM for next model
+            self.broadcast(job_id, {
+                "type": "log",
+                "level": "info",
+                "message": f"Evicting '{model_name}' from GPU VRAM (keep_alive: 0)..."
+            })
+            self.evict_ollama_model(client, model_name)
+
+            self.broadcast(job_id, {
+                "type": "model_done",
+                "job_id": job_id,
+                "model": model_name,
+                "run_id": run_id,
+                "questions_solved": passed_cases,
+                "total_questions": len(test_cases),
+                "pass_rate_pct": round(q_pass_rate, 1),
+                "avg_speed": round(avg_speed, 1),
+                "total_latency_sec": round(total_latency, 2)
+            })
+
+        # Append to Test metrics/Summary.md
+        self._append_summary_md(all_summaries)
+
+        # Update job to completed
+        benchmark_store.update_job_status(conn, job_id, "completed", result_run_ids=created_run_ids)
+
+        elapsed = round(time.perf_counter() - job_start_time, 2)
+        self.broadcast(job_id, {
+            "type": "job_done",
+            "job_id": job_id,
+            "run_ids": created_run_ids,
+            "total_models": len(models),
+            "total_questions": len(test_cases),
+            "elapsed_sec": elapsed
+        })
+
+
+WORKER_INSTANCE = BenchmarkJobWorker()
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
@@ -184,6 +604,14 @@ class BenchmarkWebHandler(BaseHTTPRequestHandler):
                 self.handle_diff(query)
             elif path == "/api/stats":
                 self.handle_stats()
+            elif path == "/api/jobs":
+                self.handle_list_jobs()
+            elif path.startswith("/api/jobs/") and path.endswith("/stream"):
+                jid = path.split("/api/jobs/")[1].split("/stream")[0]
+                self.handle_job_stream(jid)
+            elif path.startswith("/api/jobs/"):
+                jid = path.split("/api/jobs/")[1]
+                self.handle_get_job(jid)
             else:
                 self.serve_static(path)
         except Exception as e:
@@ -204,6 +632,11 @@ class BenchmarkWebHandler(BaseHTTPRequestHandler):
                 self.handle_sandbox_stream()
             elif path == "/api/sync":
                 self.handle_sync_questions()
+            elif path == "/api/benchmark/run":
+                self.handle_launch_benchmark()
+            elif path.startswith("/api/jobs/") and path.endswith("/abort"):
+                jid = path.split("/api/jobs/")[1].split("/abort")[0]
+                self.handle_abort_job(jid)
             else:
                 self.send_error_json(f"Unknown POST endpoint: {path}", 404)
         except Exception as e:
@@ -1036,6 +1469,146 @@ class BenchmarkWebHandler(BaseHTTPRequestHandler):
         with conn:
             qmap = benchmark_store.sync_questions_from_xml(conn, xml_path_or_pattern=os.path.join(QUESTIONS_DIR, "*.xml"))
         self.send_json({"success": True, "synced_questions": len(qmap)})
+
+    # ==========================================================================
+    # Asynchronous Job Queue Handlers (Phase 7)
+    # ==========================================================================
+
+    def handle_launch_benchmark(self):
+        """
+        POST /api/benchmark/run
+        Registers a multi-model benchmark job, enqueues it with the background worker,
+        and immediately returns HTTP 202 Accepted in <20ms with job metadata and SSE stream URL.
+        """
+        body = self.read_json_body()
+        models = body.get("models", [])
+        if not models or not isinstance(models, list):
+            self.send_error_json("Payload must contain a non-empty 'models' array.", 400)
+            return
+
+        suites = body.get("suites")
+        if suites is not None and not isinstance(suites, list):
+            suites = [suites]
+
+        temperature = float(body.get("temperature", 0.0))
+        max_tokens = int(body.get("max_tokens", 1200))
+        concurrency = int(body.get("concurrency", 1))
+
+        conn = get_db()
+        with conn:
+            job_id = benchmark_store.create_job(
+                conn=conn,
+                models=models,
+                suites=suites,
+                temperature=temperature,
+                blanket_max_tokens=max_tokens,
+                concurrency=concurrency
+            )
+            job = benchmark_store.get_job(conn, job_id)
+
+        WORKER_INSTANCE.enqueue_job(job_id)
+
+        self.send_json({
+            "job_id": job_id,
+            "job_uuid": job["job_uuid"],
+            "status": "queued",
+            "models": models,
+            "suites": suites,
+            "stream_url": f"/api/jobs/{job_id}/stream",
+            "message": "Benchmark job accepted and queued for in-container execution."
+        }, status_code=202)
+
+    def handle_list_jobs(self):
+        """GET /api/jobs - Returns historical and queued benchmark jobs."""
+        conn = get_db()
+        with conn:
+            jobs = benchmark_store.list_jobs(conn, limit=50)
+        self.send_json({
+            "jobs": jobs,
+            "total": len(jobs),
+            "active_job_id": WORKER_INSTANCE.active_job_id
+        })
+
+    def handle_get_job(self, job_id_or_uuid: str):
+        """GET /api/jobs/{id} - Returns metadata and status for a single job."""
+        conn = get_db()
+        with conn:
+            job = benchmark_store.get_job(conn, job_id_or_uuid)
+        if not job:
+            self.send_error_json(f"Job '{job_id_or_uuid}' not found", 404)
+            return
+        job["is_active"] = (WORKER_INSTANCE.active_job_id == job["id"])
+        self.send_json(job)
+
+    def handle_abort_job(self, job_id_or_uuid: str):
+        """POST /api/jobs/{id}/abort - Signals cancellation to an executing or queued job."""
+        conn = get_db()
+        with conn:
+            job = benchmark_store.get_job(conn, job_id_or_uuid)
+        if not job:
+            self.send_error_json(f"Job '{job_id_or_uuid}' not found", 404)
+            return
+        WORKER_INSTANCE.request_abort(job["id"])
+        self.send_json({
+            "success": True,
+            "job_id": job["id"],
+            "message": f"Cancellation signal dispatched for Job #{job['id']}."
+        })
+
+    def handle_job_stream(self, job_id_or_uuid: str):
+        """
+        GET /api/jobs/{id}/stream
+        Real-time telemetry stream using Server-Sent Events (SSE).
+        Streams test progress, assertion evaluations, hardware latency, and model swapping.
+        """
+        conn = get_db()
+        with conn:
+            job = benchmark_store.get_job(conn, job_id_or_uuid)
+        if not job:
+            self.send_error_json(f"Job '{job_id_or_uuid}' not found", 404)
+            return
+
+        job_id = job["id"]
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_cors_headers()
+        self.end_headers()
+
+        def send_sse(event_data: Dict[str, Any]):
+            msg = f"data: {json.dumps(event_data)}\n\n".encode("utf-8")
+            self.wfile.write(msg)
+            self.wfile.flush()
+
+        sub_queue, backlog = WORKER_INSTANCE.subscribe(job_id)
+
+        try:
+            # Replay historical event backlog for late-joining or refreshed browser tabs
+            for ev in backlog:
+                send_sse(ev)
+
+            # If job is already in a terminal state, end stream
+            if job["status"] in ("completed", "failed", "aborted"):
+                send_sse({"type": "job_status", "job_id": job_id, "status": job["status"]})
+                return
+
+            while True:
+                try:
+                    ev = sub_queue.get(timeout=2.0)
+                    send_sse(ev)
+                    if ev.get("type") in ("job_done", "job_error", "aborted"):
+                        break
+                except queue.Empty:
+                    # Heartbeat comment to keep HTTP connection alive through proxies
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            WORKER_INSTANCE.unsubscribe(job_id, sub_queue)
+            self.close_connection = True
 
     # ==========================================================================
     # XML Manipulation Helpers

@@ -42,6 +42,7 @@ services:
       - ./web:/app/web
       - ./Questions:/app/Questions
       - ./benchmark.db:/app/benchmark.db
+      - ./Test metrics:/app/Test metrics
       - ./.env:/app/.env:ro
       - ./server.py:/app/server.py
       - ./modelAssertion.py:/app/modelAssertion.py
