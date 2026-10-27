@@ -17,6 +17,7 @@ services:
       - ./Modelfile:/Modelfile
       - ./entrypoint.sh:/root/entrypoint.sh
       - ./.env:/root/.env:ro
+      - ./benchmark.db:/root/benchmark.db
     entrypoint: ["/usr/bin/bash", "/root/entrypoint.sh"]
     restart: always
     deploy:
@@ -26,3 +27,44 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+  # Interactive Web Management Dashboard & CRUD Interface (Phase 6)
+  # Access via http://localhost:8080
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: benchmark-web-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./web:/app/web
+      - ./Questions:/app/Questions
+      - ./benchmark.db:/app/benchmark.db
+      - ./.env:/app/.env:ro
+      - ./server.py:/app/server.py
+      - ./modelAssertion.py:/app/modelAssertion.py
+      - ./benchmark_store.py:/app/benchmark_store.py
+      - ./testLLM.py:/app/testLLM.py
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - PORT=8080
+      - DB_PATH=/app/benchmark.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - ollama
+
+  # Optional Web-Based Database Management UI (Phase 2 & Phase 6)
+  # Launch with: docker compose --profile db up -d (Access via http://localhost:8081)
+  db-viewer:
+    image: coleifer/sqlite-web:latest
+    container_name: benchmark-db-viewer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./benchmark.db:/data/benchmark.db
+    environment:
+      - SQLITE_DATABASE=benchmark.db
+    profiles: ["tools", "db"]

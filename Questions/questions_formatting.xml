@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="Strict Formatting &amp; Schema Conformance Suite">
+    <!-- Test Case 1: Strict JSON Schema Generation -->
+    <test_case id="format-json-strict-schema" tier="4" category="formatting" difficulty="hard">
+        <name>Strict JSON Schema Generation</name>
+        <question>Output a raw JSON object with exactly two keys: "status" (string with value "active") and "code" (integer with value 200). Do not include any explanations, markdown code blocks, or greetings. Output only raw JSON.</question>
+        <system_prompt>You are a strict API endpoint that outputs raw JSON without commentary or markdown code blocks.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_all">
+                <expected>"status"</expected>
+                <expected>"active"</expected>
+                <expected>"code"</expected>
+                <expected>200</expected>
+            </assert>
+            <assert type="regex">^\{[\s\S]*\}$</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Tagged Output Delimiters -->
+    <test_case id="format-xml-tag-wrapper" tier="4" category="formatting" difficulty="medium">
+        <name>Tagged Output Delimiters</name>
+        <question>Respond to this question by enclosing your answer directly between &lt;result&gt; and &lt;/result&gt; tags: What is the official currency of Japan?</question>
+        <system_prompt>You are a formatting assistant that encloses answers inside specified XML tags.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_all" case_sensitive="false">
+                <expected>&lt;result&gt;</expected>
+                <expected>&lt;/result&gt;</expected>
+                <expected>yen</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Exact Word Count (10 Words) -->
+    <test_case id="format-word-count-exact-ten" tier="4" category="formatting" difficulty="hard">
+        <name>Exact Word Count Constraint (10 Words)</name>
+        <question>Write a complete statement about the ocean that contains exactly 10 words. Do not include any quotes, commentary, or punctuation as separate words. Only the 10 words.</question>
+        <system_prompt>You are a precise writing assistant that strictly conforms to exact word count limits.</system_prompt>
+        <temperature>0</temperature>
+        <assertions>
+            <assert type="exact_words">10</assert>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>ocean</expected>
+                <expected>sea</expected>
+                <expected>water</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 4: CSV Header Formatting -->
+    <test_case id="format-csv-header-row" tier="1" category="formatting" difficulty="easy">
+        <name>CSV Header Formatting</name>
+        <question>Output a single CSV header line with the following four column names in order: id, username, email, created_at. Do not include quotes, spaces, markdown backticks, or extra lines.</question>
+        <system_prompt>You are a strict CSV generator.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">id,username,email,created_at</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 5: All-Caps Single Word Response -->
+    <test_case id="format-uppercase-only-lipogram" tier="4" category="formatting" difficulty="hard">
+        <name>Uppercase Only Planet Name</name>
+        <question>What planet is closest to the Sun in our solar system? Respond with ONLY the uppercase name of the planet in capital letters, with no other words, punctuation, or markdown formatting.</question>
+        <system_prompt>You are a strict output formatter. Output only the requested word in capital letters.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="exact">MERCURY</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 6: Standard Hex Color Representation -->
+    <test_case id="format-hex-color-strict" tier="1" category="formatting" difficulty="easy">
+        <name>Hexadecimal Color Code Representation</name>
+        <question>What is the 6-character hexadecimal color code for pure bright red? Include the leading hashtag (#).</question>
+        <system_prompt>You are a web design assistant.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>#FF0000</expected>
+                <expected>#ff0000</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 7: Nil UUID Format -->
+    <test_case id="format-uuid-dummy" tier="1" category="formatting" difficulty="easy">
+        <name>Nil UUID Canonical Format</name>
+        <question>What is the standard representation of the canonical "nil" or all-zeros UUID in standard 8-4-4-4-12 hyphenated hexadecimal notation?</question>
+        <system_prompt>You are a software standards assistant.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains">00000000-0000-0000-0000-000000000000</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 8: Markdown Table Structure -->
+    <test_case id="format-markdown-table-2x2" tier="2" category="formatting" difficulty="medium">
+        <name>Markdown Table Structure</name>
+        <question>Render a 2-column Markdown table with header columns "Language" and "Paradigm". Include one data row: "Haskell" and "Functional". Output only the Markdown table.</question>
+        <system_prompt>You are a Markdown formatter.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_all">
+                <expected>Language</expected>
+                <expected>Paradigm</expected>
+                <expected>Haskell</expected>
+                <expected>Functional</expected>
+                <expected>|</expected>
+            </assert>
+            <assert type="regex">\|[\s\-:]+\|[\s\-:]+\|</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 9: Semantic Versioning String -->
+    <test_case id="format-semver-representation" tier="1" category="formatting" difficulty="easy">
+        <name>Semantic Versioning SemVer String</name>
+        <question>If a software release has major version 2, minor version 4, and patch version 1, what is its standard Semantic Version (SemVer 2.0.0) string?</question>
+        <system_prompt>You are a software versioning assistant.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains">2.4.1</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 10: Lipogram Omitting Letter 'a' -->
+    <test_case id="format-lipogram-no-a" tier="4" category="formatting" difficulty="hard">
+        <name>Lipogram Omitting Letter 'a'</name>
+        <question>Write a short sentence of at least 5 words describing winter without using the letter "a" (neither uppercase 'A' nor lowercase 'a'). Do not use any words containing that letter.</question>
+        <system_prompt>You are a constrained writing assistant. Strictly never use the letter 'a' or 'A'.</system_prompt>
+        <temperature>0.1</temperature>
+        <assertions>
+            <assert type="not_contains" case_sensitive="false">a</assert>
+            <assert type="min_words">5</assert>
+            <assert type="not_empty" />
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 11: JSON Boolean Array -->
+    <test_case id="format-boolean-json-array" tier="1" category="formatting" difficulty="easy">
+        <name>JSON Boolean Array</name>
+        <question>Output a raw JSON array containing three boolean values in this exact sequence: true, false, true. Output only the array without any additional text.</question>
+        <system_prompt>You are a JSON formatting assistant.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any">
+                <expected>[true, false, true]</expected>
+                <expected>[true,false,true]</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 12: Boxed Delimiter Enclosure -->
+    <test_case id="format-boxed-delimiter" tier="4" category="formatting" difficulty="medium">
+        <name>Boxed Delimiter Enclosure</name>
+        <question>Enclose the single word SUCCESS inside triple asterisks on both sides (e.g. ***WORD***). Output only this enclosed token without any additional words or punctuation.</question>
+        <system_prompt>You are a precise delimiter assistant.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains">***SUCCESS***</assert>
+        </assertions>
+    </test_case>
+</test_suite>

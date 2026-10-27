@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Benchmark Suite &amp; Management Dashboard</title>
+    <meta name="description" content="Interactive Matrix, Diff Inspector, and Question CRUD Dashboard for LLM Evaluation">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <!-- Top Navigation & System Health Header -->
+    <header class="app-header">
+        <div class="header-brand">
+            <div class="brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+            </div>
+            <div class="brand-title">
+                <h1>LLM Benchmark Platform</h1>
+                <span class="brand-tag">v2.0 &bull; Phase 6 Dashboard</span>
+            </div>
+        </div>
+
+        <!-- Global Status Indicators -->
+        <div class="health-ribbon" id="health-ribbon">
+            <div class="health-pill" id="ollama-status-pill" title="Local Ollama Inference Engine">
+                <span class="status-dot pulsing" id="ollama-dot"></span>
+                <span class="health-label">Ollama</span>
+                <span class="health-val" id="ollama-status-text">Connecting...</span>
+            </div>
+            <div class="health-pill" id="gemini-status-pill" title="Google Gemini Cloud API">
+                <span class="status-dot" id="gemini-dot"></span>
+                <span class="health-label">Gemini</span>
+                <span class="health-val" id="gemini-status-text">Checking...</span>
+            </div>
+            <div class="health-pill" id="db-status-pill" title="Relational SQLite Storage">
+                <span class="status-dot" id="db-dot"></span>
+                <span class="health-label">Database</span>
+                <span class="health-val" id="db-status-text">Active</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" id="tab-matrix" data-view="matrix-view">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Heatmap Matrix
+            </button>
+            <button class="nav-tab" id="tab-diff" data-view="diff-view">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Diff Inspector
+            </button>
+            <button class="nav-tab" id="tab-crud" data-view="crud-view">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                Question CRUD
+            </button>
+            <button class="nav-tab" id="tab-sandbox" data-view="sandbox-view">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                Live Sandbox
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Application Container -->
+    <main class="app-main">
+
+        <!-- ============================================================== -->
+        <!-- VIEW 1: HEATMAP MATRIX EXPLORER -->
+        <!-- ============================================================== -->
+        <section id="matrix-view" class="view-panel active">
+            <!-- Telemetry Stat Cards -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Active Test Probes</span>
+                        <span class="metric-icon">📋</span>
+                    </div>
+                    <div class="metric-value" id="stat-total-questions">102</div>
+                    <div class="metric-sub" id="stat-suites-count">Across 11 calibrated suites</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Evaluated Models</span>
+                        <span class="metric-icon">🤖</span>
+                    </div>
+                    <div class="metric-value" id="stat-total-models">--</div>
+                    <div class="metric-sub" id="stat-models-sub">Local Ollama &amp; Cloud Gemini</div>
+                </div>
+                <div class="metric-card highlight-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Benchmark Leader</span>
+                        <span class="metric-icon">🏆</span>
+                    </div>
+                    <div class="metric-value" id="stat-top-model">--</div>
+                    <div class="metric-sub" id="stat-top-acc">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-title">Avg Generation Speed</span>
+                        <span class="metric-icon">⚡</span>
+                    </div>
+                    <div class="metric-value" id="stat-avg-speed">--</div>
+                    <div class="metric-sub">Tokens per second throughput</div>
+                </div>
+            </div>
+
+            <!-- Matrix Filter Controls -->
+            <div class="filter-toolbar">
+                <div class="search-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="matrix-search" placeholder="Search questions by ID, prompt, or suite...">
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Tier:</span>
+                    <div class="pill-filters" id="tier-pills">
+                        <button class="pill-btn active" data-tier="all">All</button>
+                        <button class="pill-btn" data-tier="1">T1 (Factual)</button>
+                        <button class="pill-btn" data-tier="2">T2 (Reasoning)</button>
+                        <button class="pill-btn" data-tier="3">T3 (Illusion)</button>
+                        <button class="pill-btn" data-tier="4">T4 (Hard)</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Category:</span>
+                    <select id="category-filter" class="styled-select">
+                        <option value="all">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Status:</span>
+                    <select id="status-filter" class="styled-select">
+                        <option value="all">All Outcomes</option>
+                        <option value="split">Split (Discriminating)</option>
+                        <option value="pass">Universal Pass</option>
+                        <option value="fail">Universal Fail</option>
+                    </select>
+                </div>
+
+                <div class="toolbar-actions">
+                    <button id="btn-refresh-matrix" class="action-btn" title="Reload Matrix Data">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Heatmap Matrix Table Container -->
+            <div class="matrix-table-wrapper" id="matrix-table-container">
+                <table class="matrix-table" id="heatmap-matrix-table">
+                    <thead>
+                        <tr id="matrix-header-row">
+                            <th class="col-probe-id sticky-col">Question ID</th>
+                            <th class="col-tier">Tier</th>
+                            <th class="col-category">Category</th>
+                            <!-- Dynamic Model Headers will be injected here -->
+                        </tr>
+                    </thead>
+                    <tbody id="matrix-body">
+                        <tr><td colspan="10" class="loading-cell">Loading matrix telemetry...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 2: SIDE-BY-SIDE DIFF INSPECTOR -->
+        <!-- ============================================================== -->
+        <section id="diff-view" class="view-panel">
+            <div class="diff-header-bar">
+                <div class="diff-select-group">
+                    <label for="diff-question-select">Select Question to Inspect:</label>
+                    <select id="diff-question-select" class="styled-select wide-select">
+                        <option value="">-- Choose Question --</option>
+                    </select>
+                </div>
+                <div class="diff-models-selector">
+                    <span class="filter-label">Compare Models:</span>
+                    <div id="diff-model-checkboxes" class="checkbox-pills">
+                        <!-- Model checkboxes dynamically injected -->
+                    </div>
+                </div>
+                <button id="btn-load-diff" class="action-btn primary-btn">
+                    Compare Outputs
+                </button>
+            </div>
+
+            <div class="diff-prompt-preview" id="diff-prompt-card" style="display: none;">
+                <div class="diff-card-meta">
+                    <span id="diff-meta-tier" class="badge">--</span>
+                    <span id="diff-meta-cat" class="badge secondary">--</span>
+                    <span id="diff-meta-suite" class="badge secondary">--</span>
+                </div>
+                <p id="diff-meta-text" class="prompt-text">--</p>
+            </div>
+
+            <div class="diff-columns-container" id="diff-columns-grid">
+                <div class="empty-state">
+                    <div class="empty-icon">🔍</div>
+                    <h3>Select a question and models to compare side-by-side</h3>
+                    <p>Inspect raw completions, reasoning token traces (&lt;think&gt; tags), latency, throughput, and assertion outcomes.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 3: QUESTION & ASSERTION CRUD MANAGER -->
+        <!-- ============================================================== -->
+        <section id="crud-view" class="view-panel">
+            <div class="crud-layout">
+                <!-- Sidebar Question Tree -->
+                <aside class="crud-sidebar">
+                    <div class="sidebar-header">
+                        <h3>Test Bank</h3>
+                        <button id="btn-create-question-modal" class="pill-btn primary-btn">➕ New</button>
+                    </div>
+                    <div class="search-box">
+                        <input type="text" id="crud-search" placeholder="Filter questions...">
+                    </div>
+                    <div class="crud-list" id="crud-questions-list">
+                        <!-- Questions tree loaded here -->
+                    </div>
+                </aside>
+
+                <!-- Question Editor Form -->
+                <div class="crud-editor-pane">
+                    <div class="editor-header">
+                        <div class="editor-title-group">
+                            <h2 id="editor-title">Question Editor</h2>
+                            <span id="editor-status-badge" class="badge">Clean</span>
+                        </div>
+                        <div class="editor-actions">
+                            <button id="btn-delete-question" class="action-btn danger-btn" style="display:none;">
+                                🗑️ Delete
+                            </button>
+                            <button id="btn-save-question" class="action-btn primary-btn">
+                                💾 Save &amp; Sync XML
+                            </button>
+                        </div>
+                    </div>
+
+                    <form id="question-form" class="editor-form">
+                        <input type="hidden" id="q-edit-id">
+                        
+                        <div class="form-row form-grid-3">
+                            <div class="form-group">
+                                <label for="q-test-id">Test ID (Unique Slug)</label>
+                                <input type="text" id="q-test-id" required placeholder="e.g. spatial-grid-movement">
+                            </div>
+                            <div class="form-group">
+                                <label for="q-name">Display Name</label>
+                                <input type="text" id="q-name" required placeholder="e.g. 2D Grid Step Coordinates">
+                            </div>
+                            <div class="form-group">
+                                <label for="q-suite-file">Target XML Suite</label>
+                                <select id="q-suite-file" class="styled-select" required>
+                                    <option value="questions_basic.xml">questions_basic.xml</option>
+                                    <option value="questions_reasoning.xml">questions_reasoning.xml</option>
+                                    <option value="questions_spatial.xml">questions_spatial.xml</option>
+                                    <option value="questions_coding_invariants.xml">questions_coding_invariants.xml</option>
+                                    <option value="questions_math_advanced.xml">questions_math_advanced.xml</option>
+                                    <option value="questions_formatting.xml">questions_formatting.xml</option>
+                                    <option value="questions_refusal.xml">questions_refusal.xml</option>
+                                    <option value="questions_hard.xml">questions_hard.xml</option>
+                                    <option value="questions_hard_heuristics.xml">questions_hard_heuristics.xml</option>
+                                    <option value="questions_hypnotic.xml">questions_hypnotic.xml</option>
+                                    <option value="questions_illusions.xml">questions_illusions.xml</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row form-grid-3">
+                            <div class="form-group">
+                                <label for="q-tier">Cognitive Tier</label>
+                                <select id="q-tier" class="styled-select" required>
+                                    <option value="1">Tier 1: Basic Factual &amp; Syntax</option>
+                                    <option value="2">Tier 2: Multi-Step Reasoning &amp; Logic</option>
+                                    <option value="3">Tier 3: Illusion &amp; Heuristic Resilience</option>
+                                    <option value="4">Tier 4: Adversarial &amp; Token Constraints</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="q-category">Category</label>
+                                <input type="text" id="q-category" required placeholder="e.g. spatial_logic">
+                            </div>
+                            <div class="form-group">
+                                <label for="q-difficulty">Difficulty</label>
+                                <select id="q-difficulty" class="styled-select">
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="q-prompt">Question / Prompt Text</label>
+                            <textarea id="q-prompt" rows="3" required placeholder="Enter the exact prompt dispatched to models..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="q-system-prompt">System Prompt (Optional)</label>
+                            <input type="text" id="q-system-prompt" placeholder="e.g. You are a precise geometry assistant.">
+                        </div>
+
+                        <div class="form-row form-grid-2">
+                            <div class="form-group">
+                                <label for="q-temperature">Temperature: <span id="q-temp-val">0.0</span></label>
+                                <input type="range" id="q-temperature" min="0.0" max="1.0" step="0.1" value="0.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="q-max-tokens">Max Tokens</label>
+                                <input type="number" id="q-max-tokens" value="1200" min="50" max="8192">
+                            </div>
+                        </div>
+
+                        <!-- Assertion Rules Section -->
+                        <div class="assertions-editor-section">
+                            <div class="assertions-header">
+                                <h3>Assertion Rules</h3>
+                                <button type="button" id="btn-add-assertion" class="action-btn secondary-btn">
+                                    ➕ Add Assertion Rule
+                                </button>
+                            </div>
+                            <div id="assertions-list-container" class="assertions-builder-list">
+                                <!-- Dynamic Assertion Rule rows injected here -->
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 4: LIVE SINGLE-PROMPT SANDBOX -->
+        <!-- ============================================================== -->
+        <section id="sandbox-view" class="view-panel">
+            <div class="sandbox-container">
+                <div class="sandbox-config-card">
+                    <div class="card-header">
+                        <h2>Prompt &amp; Model Configuration</h2>
+                        <div class="sandbox-preset-select">
+                            <label for="sandbox-preset">Load from Bank:</label>
+                            <select id="sandbox-preset" class="styled-select">
+                                <option value="">-- Choose Existing Question --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group form-row-full" style="margin-bottom: 1.25rem;">
+                        <label style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; font-weight: 600;">
+                            <span>Inference Model</span>
+                            <span class="text-muted" style="font-size: 0.75rem;">Select target model for live probe</span>
+                        </label>
+                        <div class="radio-pill-group" id="sandbox-model-radio-group">
+                            <label class="radio-pill" for="radio-deepseek-r1">
+                                <input type="radio" name="sandbox_model" id="radio-deepseek-r1" value="deepseek-r1:1.5b" checked>
+                                <span>🧠 deepseek-r1:1.5b</span>
+                            </label>
+                            <label class="radio-pill" for="radio-llama32">
+                                <input type="radio" name="sandbox_model" id="radio-llama32" value="llama3.2">
+                                <span>llama3.2</span>
+                            </label>
+                            <label class="radio-pill" for="radio-qwen3b">
+                                <input type="radio" name="sandbox_model" id="radio-qwen3b" value="qwen2.5-coder:3b">
+                                <span>qwen2.5-coder:3b</span>
+                            </label>
+                            <label class="radio-pill" for="radio-phi3">
+                                <input type="radio" name="sandbox_model" id="radio-phi3" value="phi3:mini">
+                                <span>phi3:mini</span>
+                            </label>
+                            <label class="radio-pill" for="radio-gemma3">
+                                <input type="radio" name="sandbox_model" id="radio-gemma3" value="gemma3:1b">
+                                <span>gemma3:1b</span>
+                            </label>
+                            <label class="radio-pill" for="radio-smollm2">
+                                <input type="radio" name="sandbox_model" id="radio-smollm2" value="smollm2:latest">
+                                <span>smollm2:latest</span>
+                            </label>
+                            <label class="radio-pill" for="radio-gemini-lite">
+                                <input type="radio" name="sandbox_model" id="radio-gemini-lite" value="gemini-3.1-flash-lite">
+                                <span>☁️ gemini-3.1-flash-lite</span>
+                            </label>
+                            <label class="radio-pill" for="radio-gemini-flash">
+                                <input type="radio" name="sandbox_model" id="radio-gemini-flash" value="gemini-3.8-flash">
+                                <span>☁️ gemini-3.8-flash</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-grid-2 form-row" style="margin-bottom: 1rem;">
+                        <div class="form-group">
+                            <label for="sandbox-temp">Temperature: <span id="sandbox-temp-val">0.0</span></label>
+                            <input type="range" id="sandbox-temp" min="0.0" max="1.0" step="0.1" value="0.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="sandbox-max-tok">Max Output Tokens</label>
+                            <input type="number" id="sandbox-max-tok" value="800" min="50" max="4096">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sandbox-system-prompt">System Prompt</label>
+                        <input type="text" id="sandbox-system-prompt" placeholder="e.g. You are a concise and precise assistant.">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sandbox-prompt">Prompt / Question</label>
+                        <textarea id="sandbox-prompt" rows="3" placeholder="Type your test prompt here..."></textarea>
+                    </div>
+
+                    <div class="assertions-editor-section">
+                        <div class="assertions-header">
+                            <h4>Real-Time Assertions</h4>
+                            <button type="button" id="btn-sandbox-add-assertion" class="action-btn secondary-btn">
+                                ➕ Add Assertion
+                            </button>
+                        </div>
+                        <div id="sandbox-assertions-container" class="assertions-builder-list">
+                            <!-- Dynamic sandbox assertion rows -->
+                        </div>
+                    </div>
+
+                    <div class="sandbox-actions-bar">
+                        <button id="btn-run-sandbox" class="action-btn primary-btn large-btn">
+                            <span class="btn-spinner" id="sandbox-spinner" style="display:none;"></span>
+                            ⚡ Run Sandbox Probe
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sandbox Output & Evaluation Display -->
+                <div class="sandbox-results-card" id="sandbox-results-panel">
+                    <div class="empty-state" id="sandbox-empty">
+                        <div class="empty-icon">⚡</div>
+                        <h3>Ready for Live Probe</h3>
+                        <p>Configure a model, prompt, and optional assertions, then click "Run Sandbox Probe".</p>
+                    </div>
+
+                    <div id="sandbox-output-content" style="display:none;">
+                        <div class="results-header">
+                            <div class="verdict-banner" id="sandbox-verdict-banner">
+                                <span class="verdict-badge" id="sandbox-verdict">PASS</span>
+                                <span class="verdict-title" id="sandbox-verdict-text">All assertions verified</span>
+                            </div>
+                            <div class="telemetry-chips" id="sandbox-telemetry-chips">
+                                <span class="telemetry-chip" id="chip-latency">Latency: --</span>
+                                <span class="telemetry-chip" id="chip-speed">Speed: --</span>
+                                <span class="telemetry-chip" id="chip-tokens">Tokens: --</span>
+                            </div>
+                        </div>
+
+                        <div class="results-section">
+                            <h4>Assertion Evaluations</h4>
+                            <div id="sandbox-assertion-results-list" class="assertion-eval-list"></div>
+                        </div>
+
+                        <div class="results-section" id="sandbox-thinking-section" style="display: none; margin-bottom: 1.25rem;">
+                            <div class="diff-think-accordion open" id="sandbox-thinking-accordion">
+                                <div class="diff-think-header" onclick="this.parentElement.classList.toggle('open')">
+                                    <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span>🧠 Reasoning Trace (&lt;think&gt;)</span>
+                                        <span id="sandbox-thinking-badge" class="badge" style="font-size: 0.68rem; background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">Streaming...</span>
+                                    </span>
+                                    <span>▾</span>
+                                </div>
+                                <div class="diff-think-body" id="sandbox-thinking-output" style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 0.82rem; max-height: 280px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+
+                        <div class="results-section">
+                            <h4 id="sandbox-output-heading">Model Output</h4>
+                            <pre class="code-block" id="sandbox-raw-output" style="min-height: 70px; white-space: pre-wrap; word-break: break-word;"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Slide-Out Result Inspection Drawer -->
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <aside class="result-drawer" id="result-drawer">
+        <div class="drawer-header">
+            <div class="drawer-title-group">
+                <span class="badge" id="drawer-status-badge">PASS</span>
+                <h3 id="drawer-title">Test Result</h3>
+            </div>
+            <button class="drawer-close" id="btn-close-drawer">&times;</button>
+        </div>
+
+        <div class="drawer-body">
+            <div class="drawer-meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">Model</span>
+                    <span class="meta-val" id="drawer-model">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Question ID</span>
+                    <span class="meta-val" id="drawer-qid">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Latency</span>
+                    <span class="meta-val" id="drawer-latency">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Throughput</span>
+                    <span class="meta-val" id="drawer-speed">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Tokens</span>
+                    <span class="meta-val" id="drawer-tokens">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Timestamp</span>
+                    <span class="meta-val" id="drawer-timestamp">--</span>
+                </div>
+            </div>
+
+            <div class="drawer-section">
+                <h4>Question Prompt</h4>
+                <div class="drawer-box" id="drawer-prompt">--</div>
+            </div>
+
+            <div class="drawer-section">
+                <h4>Assertion Breakdown</h4>
+                <div id="drawer-assertions-list" class="drawer-assertions"></div>
+            </div>
+
+            <div class="drawer-section">
+                <h4>Completion Output</h4>
+                <pre class="drawer-code" id="drawer-output">--</pre>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Notification Toast -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

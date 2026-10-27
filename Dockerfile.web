@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Ensure unbuffered output for real-time Docker logging
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Copy project files
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY server.py .
+COPY benchmark_store.py .
+COPY modelAssertion.py .
+COPY testLLM.py .
+COPY matrix_reporter.py .
+COPY web/ ./web/
+COPY Questions/ ./Questions/
+
+EXPOSE 8080
+
+CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8080"]

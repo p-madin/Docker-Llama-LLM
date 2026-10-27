@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <test_suite name="LLM Evaluation Suite">
     <!-- Test Case 1: Math question with numeric or word answer -->
-    <test_case id="math-1" category="arithmetic">
+    <test_case id="math-1" tier="1" category="basic_factual" difficulty="easy">
         <name>Basic Addition (1+1)</name>
         <question>What is 1 + 1? Answer in one short sentence.</question>
         <system_prompt>You are a precise calculator assistant. Be concise.</system_prompt>
@@ -17,7 +17,7 @@
     </test_case>
 
     <!-- Test Case 2: Factual Knowledge with contains & not_contains assertions -->
-    <test_case id="fact-france" category="geography">
+    <test_case id="fact-france" tier="1" category="basic_factual" difficulty="easy">
         <name>Capital of France</name>
         <question>What is the capital city of France?</question>
         <system_prompt>You are a factual knowledge assistant. Give a direct answer.</system_prompt>
@@ -30,7 +30,7 @@
     </test_case>
 
     <!-- Test Case 3: Code generation with regex & contains_all assertions -->
-    <test_case id="code-even" category="coding">
+    <test_case id="code-even" tier="1" category="basic_code" difficulty="easy">
         <name>Python Even Number Function</name>
         <question>Write a Python function named `is_even` that takes an integer and returns True if it is even, False otherwise.</question>
         <system_prompt>You are an expert Python programmer. Output valid Python code.</system_prompt>
@@ -48,7 +48,7 @@
     </test_case>
 
     <!-- Test Case 4: Reasoning / Logic with performance metrics check -->
-    <test_case id="logic-bool" category="reasoning">
+    <test_case id="logic-bool" tier="1" category="basic_factual" difficulty="easy">
         <name>Boolean Logic</name>
         <question>If all roses are flowers and some flowers fade quickly, can we be certain that all roses fade quickly? Answer Yes or No and briefly explain.</question>
         <system_prompt>You are a formal logic expert. Answer directly.</system_prompt>
@@ -63,7 +63,7 @@
     </test_case>
 
     <!-- Test Case 5: Word count / formatting constraint -->
-    <test_case id="format-color" category="formatting">
+    <test_case id="format-color" tier="1" category="basic_factual" difficulty="easy">
         <name>Single Word Answer</name>
         <question>What color is the clear sky on a sunny day? Answer with exactly one word.</question>
         <system_prompt>Reply with only one single word. No punctuation, no extra text.</system_prompt>
@@ -74,7 +74,7 @@
     </test_case>
 
     <!-- Test Case 6: Literature Knowledge -->
-    <test_case id="lit-iliad" category="literature">
+    <test_case id="lit-iliad" tier="1" category="basic_factual" difficulty="easy">
         <name>Iliad Character Recognition</name>
         <question>Name one famous character from Homer's epic poem The Iliad.</question>
         <system_prompt>Answer concisely with the name of the character.</system_prompt>
@@ -95,7 +95,7 @@
     </test_case>
 
     <!-- Test Case 7: Code Comprehension (PHP) -->
-    <test_case id="code-explain-php" category="coding_comprehension">
+    <test_case id="code-explain-php" tier="1" category="basic_code" difficulty="easy">
         <name>PHP Code Explanation (Sum Array)</name>
         <question>In one sentence, what does this PHP function do? function addAll($array){$ttl=0;foreach($array as $int){$ttl = $ttl+$int;} return $ttl}</question>
         <system_prompt>Explain what the function does concisely.</system_prompt>
@@ -115,18 +115,264 @@
         </assertions>
     </test_case>
 
-    <!-- Test Case 8: Order of Operations Arithmetic -->
-    <test_case id="math-order-ops" category="arithmetic">
-        <name>Order of Operations (BEDMAS)</name>
-        <question>Evaluate (15 * 4 - 12) / 6 + 8 * 2. Answer with only the final number.</question>
-        <system_prompt>Answer with only the single resulting number.</system_prompt>
+    <!-- Test Case 8: Basic Arithmetic (Multiplication Table) -->
+    <test_case id="math-basic" tier="1" category="basic_factual" difficulty="easy">
+        <name>Basic Multiplication (7 * 8)</name>
+        <question>What is 7 multiplied by 8? State only the resulting number.</question>
+        <system_prompt>You are a precise calculator assistant. State only the resulting number.</system_prompt>
         <temperature>0.0</temperature>
         <assertions>
             <assert type="contains_any" case_sensitive="false">
-                <expected>24</expected>
-                <expected>twenty-four</expected>
-                <expected>twenty four</expected>
+                <expected>56</expected>
+                <expected>\boxed{56}</expected>
+                <expected>fifty-six</expected>
+                <expected>fifty six</expected>
             </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 9: General Knowledge - Leaf Color -->
+    <test_case id="fact-leaf-color" tier="1" category="basic_factual" difficulty="easy">
+        <name>Tree Leaf Color</name>
+        <question>What colour are healthy tree leaves typically? Answer in one short sentence.</question>
+        <system_prompt>You are a factual assistant. Answer concisely in one short sentence.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">green</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 10: Systems Knowledge - MySQL Default OS -->
+    <test_case id="tech-mysql-os" tier="1" category="basic_factual" difficulty="easy">
+        <name>MySQL Primary Operating System</name>
+        <question>What operating system is MySQL most often run on? State the operating system.</question>
+        <system_prompt>You are a systems infrastructure assistant. State the operating system concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Linux</expected>
+                <expected>GNU/Linux</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 11: Astronomy - Planetary Identification -->
+    <test_case id="astro-mars" tier="1" category="basic_factual" difficulty="easy">
+        <name>The Red Planet Identification</name>
+        <question>Which planet in our solar system is known as the Red Planet? State the name of the planet.</question>
+        <system_prompt>You are an astronomy assistant. Answer concisely with the name of the planet.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">Mars</assert>
+            <assert type="not_contains" case_sensitive="false">Venus</assert>
+            <assert type="not_contains" case_sensitive="false">Jupiter</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 12: World History - Ancient Civilizations -->
+    <test_case id="hist-pyramids" tier="1" category="basic_factual" difficulty="easy">
+        <name>Great Pyramids Ancient Civilization</name>
+        <question>What ancient civilization built the Great Pyramids of Giza? State the civilization.</question>
+        <system_prompt>You are a history assistant. Answer concisely with the name of the civilization.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Egypt</expected>
+                <expected>Egyptian</expected>
+                <expected>Egyptians</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Roman</assert>
+            <assert type="not_contains" case_sensitive="false">Greek</assert>
+            <assert type="not_contains" case_sensitive="false">Mayan</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 13: Human Biology - Organ Function -->
+    <test_case id="bio-heart-pump" tier="1" category="basic_factual" difficulty="easy">
+        <name>Blood Pumping Organ</name>
+        <question>Which human organ is primarily responsible for pumping blood throughout the body? State the name of the organ.</question>
+        <system_prompt>You are a biology assistant. Answer concisely with the name of the organ.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">heart</assert>
+            <assert type="not_contains" case_sensitive="false">lungs</assert>
+            <assert type="not_contains" case_sensitive="false">brain</assert>
+            <assert type="not_contains" case_sensitive="false">liver</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 14: World Classical Literature - Journey to the West -->
+    <test_case id="lit-monkey-king" tier="1" category="basic_factual" difficulty="easy">
+        <name>Monkey King Character Recognition</name>
+        <question>What is the name of the Monkey King in classic Chinese literature and the novel Journey to the West? State the name.</question>
+        <system_prompt>You are a literature assistant. State the name of the character concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Sun Wukong</expected>
+                <expected>Wukong</expected>
+                <expected>Sun Wu-kong</expected>
+                <expected>Sun Wu Kong</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Goku</assert>
+            <assert type="not_contains" case_sensitive="false">Naruto</assert>
+            <assert type="not_contains" case_sensitive="false">Luffy</assert>
+            <assert type="not_contains" case_sensitive="false">Hanuman</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 15: Physical Geography - Longest River in Asia -->
+    <test_case id="geo-asia-river" tier="1" category="basic_factual" difficulty="easy">
+        <name>Longest River in Asia</name>
+        <question>What is the longest river in Asia? State the name of the river.</question>
+        <system_prompt>You are a geography assistant. Answer concisely with the name of the river.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Yangtze</expected>
+                <expected>Yangzi</expected>
+                <expected>Chang Jiang</expected>
+                <expected>Changjiang</expected>
+                <expected>Yangtze River</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Yellow River</assert>
+            <assert type="not_contains" case_sensitive="false">Huang He</assert>
+            <assert type="not_contains" case_sensitive="false">Mekong</assert>
+            <assert type="not_contains" case_sensitive="false">Ganges</assert>
+            <assert type="not_contains" case_sensitive="false">Nile</assert>
+            <assert type="not_contains" case_sensitive="false">Amazon</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 16: World History - Ancient Eurasian Trade Network -->
+    <test_case id="hist-silk-road" tier="1" category="basic_factual" difficulty="easy">
+        <name>Ancient Eurasian Trade Network</name>
+        <question>What historical network of overland trade routes connected China and East Asia with the Mediterranean and Europe? State the name of the route.</question>
+        <system_prompt>You are a history assistant. State the name of the historical trade network.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Silk Road</expected>
+                <expected>Silk Route</expected>
+                <expected>Silk Roads</expected>
+                <expected>Silk-Road</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Spice Route</assert>
+            <assert type="not_contains" case_sensitive="false">Amber Road</assert>
+            <assert type="not_contains" case_sensitive="false">Incense Route</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 17: Sports Knowledge - Association Football / Soccer -->
+    <test_case id="sport-soccer" tier="1" category="basic_factual" difficulty="easy">
+        <name>Field Sport Identification (Soccer / Football)</name>
+        <question>What is the name of the popular outdoor field sport where two teams kick a round ball to score goals into the opponent's net without using their hands? State the name of the sport.</question>
+        <system_prompt>You are a sports knowledge assistant. State the common name of the sport directly and concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Soccer</expected>
+                <expected>Football</expected>
+                <expected>Association Football</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Basketball</assert>
+            <assert type="not_contains" case_sensitive="false">Cricket</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 18: Sports Knowledge - Rugby -->
+    <test_case id="sport-rugby" tier="1" category="basic_factual" difficulty="easy">
+        <name>Field Sport Identification (Rugby)</name>
+        <question>What is the name of the field sport where players run carrying an egg-shaped ball to score a try by grounding the ball behind the opponent's try line? State the name of the sport.</question>
+        <system_prompt>You are a sports knowledge assistant. State the common name of the sport directly and concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Rugby</expected>
+                <expected>Rugby Union</expected>
+                <expected>Rugby League</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">Basketball</assert>
+            <assert type="not_contains" case_sensitive="false">Baseball</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 19: Desktop Computing - Document Writing Application -->
+    <test_case id="tech-doc-editor-app" tier="1" category="basic_factual" difficulty="easy">
+        <name>Desktop Document Writing Application</name>
+        <question>What desktop application could help me write documents?</question>
+        <system_prompt>You are a software knowledge assistant. Answer concisely with the name of the desktop application.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Word</expected>
+                <expected>Microsoft Word</expected>
+                <expected>Google Docs</expected>
+                <expected>LibreOffice</expected>
+                <expected>Writer</expected>
+                <expected>WordPad</expected>
+                <expected>Pages</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 20: Systems Utilities - Windows TAR Extraction -->
+    <test_case id="tech-windows-tar-extract" tier="1" category="basic_factual" difficulty="easy">
+        <name>Windows TAR Archive Extraction Tool</name>
+        <question>How could I open a .tar file on Microsoft Windows?</question>
+        <system_prompt>You are a Windows systems assistant. State the tool or utility name concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>7-Zip</expected>
+                <expected>7zip</expected>
+                <expected>WinRAR</expected>
+                <expected>WinZip</expected>
+                <expected>tar</expected>
+                <expected>PeaZip</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 21: Web Standards - CSS Hyperlink Interactivity -->
+    <test_case id="code-css-hyperlink-hover" tier="1" category="basic_code" difficulty="easy">
+        <name>CSS Hyperlink Interactive Pseudo-Class</name>
+        <question>How could I use CSS to enhance a hyperlink's interactivity?</question>
+        <system_prompt>You are a web development assistant. State the CSS pseudo-class concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">:hover</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 22: JavaScript Syntax - String to Integer Conversion -->
+    <test_case id="code-js-string-to-int" tier="1" category="basic_code" difficulty="easy">
+        <name>JavaScript String to Integer Conversion</name>
+        <question>In Javascript how can I convert a string to an integer?</question>
+        <system_prompt>You are a JavaScript programming assistant. State the function or method concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>parseInt</expected>
+                <expected>Number(</expected>
+                <expected>Number</expected>
+                <expected>Math.floor</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 23: HTML Standards - Multiple Option Selection -->
+    <test_case id="code-html-multiselect-element" tier="1" category="basic_code" difficulty="easy">
+        <name>HTML Multiple Option Selection Element</name>
+        <question>In HTML what user input element may facilitate the selection of multiple options from a set of options?</question>
+        <system_prompt>You are an HTML standards assistant. State the element or markup attribute concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>checkbox</expected>
+                <expected>multiple</expected>
+            </assert>
+            <assert type="regex" case_sensitive="false">(?i)(checkbox|select.*multiple|multiple.*select)</assert>
         </assertions>
     </test_case>
 </test_suite>

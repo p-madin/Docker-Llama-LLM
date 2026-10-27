@@ -1,23 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <test_suite name="LLM Challenging and Adversarial Suite">
-    <!-- Test Case 1: Tokenization Blindness - Character Counting -->
-    <test_case id="hard-count-r" category="tokenization_blindness">
-        <name>Letter Counting (Strawberry)</name>
-        <question>How many times does the letter 'r' appear in the word 'strawberry'? Answer with only the digit and no other words or punctuation.</question>
-        <system_prompt>Reply with only a single digit.</system_prompt>
-        <temperature>0.0</temperature>
-        <assertions>
-            <assert type="contains_any" case_sensitive="false">
-                <expected>3</expected>
-                <expected>\boxed{3}</expected>
-                <expected>three</expected>
-            </assert>
-        </assertions>
-    </test_case>
-
-
-    <!-- Test Case 4: Strict Negative Constraint - Lipogram (No 'e') -->
-    <test_case id="hard-no-e" category="negative_constraint">
+    <!-- Test Case 1: Strict Negative Constraint - Lipogram (No 'e') -->
+    <test_case id="hard-no-e" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
         <name>Negative Constraint (Zero 'e's)</name>
         <question>Write a complete sentence describing a cat. Do NOT use the letter 'e' anywhere in your response. The letter 'e' or 'E' must not appear at all.</question>
         <system_prompt>Strictly avoid the letter 'e'. Any 'e' is a complete failure. You must write an actual, complete sentence describing a cat.</system_prompt>
@@ -39,22 +23,8 @@
         </assertions>
     </test_case>
 
-    <!-- Test Case 5: Exact Character Reversal -->
-    <test_case id="hard-reverse-word" category="character_manipulation">
-        <name>Word Reversal (KNOWLEDGE)</name>
-        <question>Reverse the letters of the word 'KNOWLEDGE'. Answer with only the reversed word in all-capital letters.</question>
-        <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
-        <temperature>0.0</temperature>
-        <assertions>
-            <assert type="contains_any" case_sensitive="false">
-                <expected>EGDELWONK</expected>
-                <expected>E-G-D-E-L-W-O-N-K</expected>
-            </assert>
-        </assertions>
-    </test_case>
-
-    <!-- Test Case 6: Multi-Step LaTeX Arithmetic Stress Probe -->
-    <test_case id="hard-complex-arithmetic" category="numeric_reasoning">
+    <!-- Test Case 2: Multi-Step LaTeX Arithmetic Stress Probe -->
+    <test_case id="hard-complex-arithmetic" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
         <name>Complex Multi-Fraction Arithmetic</name>
         <question>Evaluate the following arithmetic expression to a single final number: \frac{\left(45 \cdot 20 + 120 - 34\right) \cdot \left(72 - 12 \cdot 4\right)}{15 \cdot 4 - 28 + 16} + \frac{144 \cdot \left(85 + 35 - 40\right)}{18 \cdot 4 - 40 + 4} - \left(12 \cdot 8 - 25 + 14\right) \cdot \left(15 - 9 + 1\right)</question>
         <system_prompt>Calculate step by step and provide the final integer result.</system_prompt>
@@ -65,6 +35,86 @@
                 <expected>two-hundred and eighteen</expected>
                 <expected>two hundred and eighteen</expected>
             </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Order of Operations Arithmetic (BEDMAS) -->
+    <test_case id="math-order-ops" tier="2" category="multi_step_reasoning" difficulty="medium">
+        <name>Order of Operations (BEDMAS)</name>
+        <question>Evaluate (15 * 4 - 12) / 6 + 8 * 2. Answer with only the final number.</question>
+        <system_prompt>Answer with only the single resulting number.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>24</expected>
+                <expected>\boxed{24}</expected>
+                <expected>twenty-four</expected>
+                <expected>twenty four</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 4: Multi-Digit Long Multiplication -->
+    <test_case id="math-long-multiplication" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
+        <name>Multi-Digit Long Multiplication (264 * 348)</name>
+        <question>What is 264 multiplied by 348? Calculate the exact product and state only the final number.</question>
+        <system_prompt>You are a precise calculator assistant. Calculate step by step and state the final product clearly.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>91872</expected>
+                <expected>91,872</expected>
+                <expected>\boxed{91872}</expected>
+                <expected>\boxed{91,872}</expected>
+                <expected>ninety-one thousand eight hundred and seventy-two</expected>
+                <expected>ninety-one thousand, eight hundred and seventy-two</expected>
+                <expected>ninety one thousand eight hundred and seventy two</expected>
+                <expected>ninety one thousand eight hundred seventy two</expected>
+                <expected>ninety-one thousand eight hundred seventy-two</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 5: Combinatorial Probability - Birthday Paradox -->
+    <test_case id="hard-birthday-paradox" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
+        <name>Birthday Paradox (30 People)</name>
+        <question>In a room of 30 randomly selected people, what is the approximate probability that at least two people share the same birthday (month and day)? State the probability as a percentage.</question>
+        <system_prompt>You are a mathematics assistant. Calculate the complementary probability that all 30 birthdays are distinct.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: 1 - (365! / (335! * 365^30)) ≈ 70.6% or ~71%. Prohibiting naked '71%' to prevent '99.71%' collision -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>70.6%</expected>
+                <expected>70.63%</expected>
+                <expected>70.7%</expected>
+                <expected>about 71%</expected>
+                <expected>around 71%</expected>
+                <expected>approx 71%</expected>
+                <expected>approximately 71%</expected>
+                <expected>about 70%</expected>
+                <expected>around 70%</expected>
+                <expected>approximately 70%</expected>
+                <expected>is 71%</expected>
+                <expected>is 70.6%</expected>
+                <expected>71 percent</expected>
+                <expected>70.6 percent</expected>
+                <expected>70% to 71%</expected>
+                <expected>70%-71%</expected>
+                <expected>~71%</expected>
+                <expected>~70.6%</expected>
+                <expected>equal to 71%</expected>
+                <expected>roughly 71%</expected>
+                <expected>roughly 70.6%</expected>
+                <expected>near 71%</expected>
+                <expected>\boxed{71%}</expected>
+                <expected>\boxed{70.6%}</expected>
+                <expected>\boxed{0.706}</expected>
+                <expected>0.706</expected>
+                <expected>0.71</expected>
+            </assert>
+            <assert type="not_contains" case_sensitive="false">99.71%</assert>
+            <assert type="not_contains" case_sensitive="false">99.7%</assert>
+            <assert type="not_contains" case_sensitive="false">99%</assert>
         </assertions>
     </test_case>
 </test_suite>

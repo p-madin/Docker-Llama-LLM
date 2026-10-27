@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Code &amp; Syntax Illusions Suite">
+    <!-- 
+      This suite tests whether models perform strict code tracing or fall prey to
+      semantic naming bias, superficial HTML inspection, and loop boundary optical illusions.
+    -->
+
+    <!-- Test Case 1: Semantic Naming Bias (drawCircle produces a triangle) -->
+    <test_case id="illusion-misnamed-circle" tier="3" category="illusion_resilience" difficulty="hard">
+        <name>Misnamed Function Output (drawCircle)</name>
+        <question>Consider this JavaScript function:
+function drawCircle(radius) {
+    for (let i = 1; i &lt;= radius; i++) {
+        console.log('*'.repeat(i));
+    }
+}
+What geometric shape does calling `drawCircle(3)` actually draw or print? State the shape.</question>
+        <system_prompt>Analyze the code logic strictly rather than relying on the function name. State the resulting shape concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>triangle</expected>
+                <expected>pyramid</expected>
+                <expected>staircase</expected>
+                <expected>right-angled triangle</expected>
+                <expected>right triangle</expected>
+            </assert>
+            <!-- Hallucination trap: model deceived by function name claiming it draws or is a circle -->
+            <assert type="not_contains" case_sensitive="false">draws a circle</assert>
+            <assert type="not_contains" case_sensitive="false">is a circle</assert>
+            <assert type="not_contains" case_sensitive="false">shape: a circle</assert>
+            <assert type="not_contains" case_sensitive="false">shape is a circle</assert>
+            <assert type="not_contains" case_sensitive="false">produces a circle</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Illegal HTML Anchor Nesting -->
+    <test_case id="illusion-nested-anchor" tier="3" category="illusion_resilience" difficulty="hard">
+        <name>Illegal Nested Anchor Tag</name>
+        <question>What is structurally or syntactically wrong with this HTML snippet?
+&lt;html&gt;&lt;body&gt;&lt;a href='/index'&gt;&lt;a href='/home'&gt;Go home&lt;/a&gt;&lt;/a&gt;&lt;/body&gt;&lt;/html&gt;
+State the primary problem in one short sentence.</question>
+        <system_prompt>You are an expert web standards validator. State the primary structural violation concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>cannot be nested</expected>
+                <expected>cannot contain another anchor</expected>
+                <expected>cannot contain another &lt;a&gt;</expected>
+                <expected>nested anchor</expected>
+                <expected>nested &lt;a&gt;</expected>
+                <expected>nesting anchor</expected>
+                <expected>nesting &lt;a&gt;</expected>
+                <expected>nested in another anchor</expected>
+                <expected>nested inside another anchor</expected>
+                <expected>cannot nest anchor</expected>
+                <expected>cannot nest &lt;a&gt;</expected>
+                <expected>cannot nest `&lt;a&gt;`</expected>
+                <expected>&lt;a&gt; inside &lt;a&gt;</expected>
+                <expected>`&lt;a&gt;` inside `&lt;a&gt;`</expected>
+                <expected>&lt;a&gt; within another &lt;a&gt;</expected>
+                <expected>`&lt;a&gt;` within another `&lt;a&gt;`</expected>
+                <expected>within another `&lt;a&gt;`</expected>
+                <expected>within another &lt;a&gt;</expected>
+                <expected>within another anchor</expected>
+                <expected>nesting of an &lt;a&gt;</expected>
+                <expected>nesting of an `&lt;a&gt;`</expected>
+                <expected>nesting of an anchor</expected>
+                <expected>nesting of anchor</expected>
+                <expected>anchor cannot be a descendant of another anchor</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Infinite Increment Loop -->
+    <test_case id="illusion-infinite-loop" tier="3" category="illusion_resilience" difficulty="hard">
+        <name>Infinite Increment Loop (i >= 0)</name>
+        <question>Consider this loop:
+for (int i = 0; i &gt;= 0; i++) {
+    print(i);
+}
+What is fundamentally wrong with this loop? State the primary problem concisely.</question>
+        <system_prompt>Trace the execution starting from initialization. State what occurs concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>infinite loop</expected>
+                <expected>never end</expected>
+                <expected>never ends</expected>
+                <expected>never terminate</expected>
+                <expected>never terminates</expected>
+                <expected>never stop</expected>
+                <expected>never stops</expected>
+                <expected>run forever</expected>
+                <expected>runs forever</expected>
+                <expected>run indefinitely</expected>
+                <expected>runs indefinitely</expected>
+                <expected>run infinitely</expected>
+                <expected>runs infinitely</expected>
+                <expected>loop will run indefinitely</expected>
+                <expected>loops indefinitely</expected>
+                <expected>endless loop</expected>
+                <expected>will not terminate</expected>
+                <expected>will not end</expected>
+            </assert>
+        </assertions>
+    </test_case>
+</test_suite>

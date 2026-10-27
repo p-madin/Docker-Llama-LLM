@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <test_suite name="LLM Hard Heuristics Suite">
     <!-- Test Case: Character Manipulation - Short Word Reversal -->
-    <test_case id="heuristics-reverse-memory" category="character_manipulation">
+    <test_case id="heuristics-reverse-memory" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
         <name>Word Reversal (MEMORY)</name>
         <question>Reverse the letters of the word 'MEMORY'. Answer with only the reversed word in all-capital letters.</question>
         <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
@@ -10,7 +10,33 @@
             <assert type="contains_any" case_sensitive="false">
                 <expected>YROMEM</expected>
                 <expected>Y-R-O-M-E-M</expected>
+                <expected>Y R O M E M</expected>
+                <expected>Y_R_O_M_E_M</expected>
             </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Negative Constraint Heuristic Probe (Accessible Lipogram) -->
+    <test_case id="heuristics-no-x" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
+        <name>Negative Constraint (Zero 'x's)</name>
+        <question>Write a complete sentence describing a river. Do NOT use the letter 'x' anywhere in your response. The letter 'x' or 'X' must not appear at all.</question>
+        <system_prompt>Strictly avoid the letter 'x'. Any 'x' or 'X' is a complete failure. You must write an actual, complete sentence describing a river.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- 1. Must fabricate an actual sentence -->
+            <assert type="not_empty"/>
+            <assert type="min_words">4</assert>
+            <!-- 2. Must be relevant to a river / flowing water -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>river</expected>
+                <expected>water</expected>
+                <expected>flow</expected>
+                <expected>stream</expected>
+                <expected>bank</expected>
+                <expected>current</expected>
+            </assert>
+            <!-- 3. Strict negative constraint: zero 'x' or 'X' -->
+            <assert type="not_contains" case_sensitive="false">x</assert>
         </assertions>
     </test_case>
 </test_suite>

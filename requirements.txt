@@ -1,0 +1,19 @@
+# ==============================================================================
+# LLM Test & Benchmark Framework Requirements
+# ==============================================================================
+# Python Version: >= 3.10
+#
+# Core Framework Dependency Policy:
+# Zero external pip dependencies are required.
+# All benchmark execution, REST API communication (Ollama & Google Gemini),
+# assertions, XML parsing, and SQLite persistence use Python standard library:
+#   - sqlite3 (Relational persistence layer - benchmark.db)
+#   - urllib.request / urllib.error (Ollama & Google Generative Language REST APIs)
+#   - json (Serialization, payload formatting, telemetry exports)
+#   - xml.etree.ElementTree (Question suite parsing)
+#   - argparse, time, re, typing, glob, dataclasses, uuid
+#
+# Optional CLI and Analysis Packages (install only if desired):
+# ------------------------------------------------------------------------------
+# tabulate>=0.9.0          # Optional: enhanced ASCII table formatting in CLI
+# sqlite-utils>=3.36       # Optional: ad-hoc SQLite CLI querying & inspection

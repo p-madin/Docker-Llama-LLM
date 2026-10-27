@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="LLM Hypnotic &amp; Hallucination Probes Suite">
+    <!-- 
+      This suite gauges model performance on questions that are deceptively simple in common human reasoning,
+      but frequently trigger tokenizer blindness, autoregressive priors, or associative hallucinations in LLMs.
+    -->
+
+    <!-- Test Case 1: Spatial Hallucination Trap (Cardinal opposite-pair confusion) -->
+    <test_case id="direction-nw" tier="2" category="multi_step_reasoning" difficulty="medium">
+        <name>Compass Direction (North-West)</name>
+        <question>What direction is between North and West? State the direction.</question>
+        <system_prompt>You are a navigation assistant. State the direction clearly.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <!-- Correct: Northwest / North-West / North West / NW -->
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Northwest</expected>
+                <expected>North-West</expected>
+                <expected>North West</expected>
+                <expected>NW</expected>
+            </assert>
+            <!-- Hallucination trap: models frequently hallucinate South or East due to opposite-pair associations -->
+            <assert type="not_contains" case_sensitive="false">South</assert>
+            <assert type="not_contains" case_sensitive="false">East</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: Tokenization Blindness - Character Counting -->
+    <test_case id="hard-count-r" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
+        <name>Letter Counting (Strawberry)</name>
+        <question>How many times does the letter 'r' appear in the word 'strawberry'? Answer with only the digit and no other words or punctuation.</question>
+        <system_prompt>Reply with only a single digit.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>3</expected>
+                <expected>\boxed{3}</expected>
+                <expected>three</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Autoregressive Next-Token Trap - Character Reversal -->
+    <test_case id="hard-reverse-word" tier="4" category="tokenizer_adversarial" difficulty="adversarial">
+        <name>Word Reversal (KNOWLEDGE)</name>
+        <question>Reverse the letters of the word 'KNOWLEDGE'. Answer with only the reversed word in all-capital letters.</question>
+        <system_prompt>Reply with only the single capitalized reversed word.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>EGDELWONK</expected>
+                <expected>E-G-D-E-L-W-O-N-K</expected>
+                <expected>E G D E L W O N K</expected>
+                <expected>E_G_D_E_L_W_O_N_K</expected>
+            </assert>
+        </assertions>
+    </test_case>
+</test_suite>

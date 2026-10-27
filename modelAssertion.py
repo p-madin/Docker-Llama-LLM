@@ -45,8 +45,11 @@ class BaseAssertion(ABC):
     """Abstract Base Class for all model output assertions."""
     rule_type: str = "base"
 
-    def __init__(self, expected_values: List[str], case_sensitive: bool = False):
-        self.expected_values = expected_values
+    def __init__(self, expected_values: Any, case_sensitive: bool = False):
+        if isinstance(expected_values, str):
+            self.expected_values = [expected_values]
+        else:
+            self.expected_values = list(expected_values) if expected_values else []
         self.case_sensitive = case_sensitive
 
     @abstractmethod
@@ -61,6 +64,10 @@ class BaseAssertion(ABC):
         """Normalizes text according to case_sensitive configuration."""
         return text if self.case_sensitive else text.lower()
 
+    def _clean_markdown(self, text: str) -> str:
+        """Strips markdown emphasis formatting (**, *, `) for resilient substring checks."""
+        return text.replace("**", "").replace("`", "")
+
 
 # ==============================================================================
 # Concrete Assertions (Single Responsibility Principle)
@@ -74,7 +81,7 @@ class ContainsAssertion(BaseAssertion):
         target = self.expected_values[0] if self.expected_values else ""
         text = self._normalize(output)
         check = self._normalize(target)
-        passed = check in text
+        passed = (check in text) or (self._clean_markdown(check) in self._clean_markdown(text))
         msg = f"Contains '{target}'" if passed else f"Expected output to contain '{target}'"
         return AssertionResult(self.rule_type, passed, msg, expected=target, actual=output.strip()[:100])
 
@@ -85,9 +92,10 @@ class ContainsAnyAssertion(BaseAssertion):
 
     def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
         text = self._normalize(output)
+        clean_text = self._clean_markdown(text)
         for target in self.expected_values:
             check = self._normalize(target)
-            if check in text:
+            if (check in text) or (self._clean_markdown(check) in clean_text):
                 return AssertionResult(
                     self.rule_type, True,
                     f"Contains match '{target}' (any of {self.expected_values})",
@@ -106,7 +114,11 @@ class ContainsAllAssertion(BaseAssertion):
 
     def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
         text = self._normalize(output)
-        missing = [target for target in self.expected_values if self._normalize(target) not in text]
+        clean_text = self._clean_markdown(text)
+        missing = [
+            target for target in self.expected_values
+            if (self._normalize(target) not in text) and (self._clean_markdown(self._normalize(target)) not in clean_text)
+        ]
         passed = len(missing) == 0
         msg = f"Contains all: {self.expected_values}" if passed else f"Missing required items: {missing}"
         return AssertionResult(self.rule_type, passed, msg, expected=self.expected_values, actual=f"missing: {missing}")
@@ -187,6 +199,32 @@ class MinWordsAssertion(BaseAssertion):
         return AssertionResult(self.rule_type, passed, msg, expected=f">= {min_words} words", actual=f"{count} words")
 
 
+class MaxWordsAssertion(BaseAssertion):
+    """Asserts that the output contains at most N words."""
+    rule_type = "max_words"
+
+    def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
+        max_words = int(self.expected_values[0]) if self.expected_values else 100
+        words = output.strip().split()
+        count = len(words)
+        passed = count <= max_words
+        msg = f"Word count {count} <= maximum limit {max_words}" if passed else f"Fabricated output has {count} word(s), exceeded maximum {max_words}"
+        return AssertionResult(self.rule_type, passed, msg, expected=f"<= {max_words} words", actual=f"{count} words")
+
+
+class ExactWordsAssertion(BaseAssertion):
+    """Asserts that the output contains exactly N words."""
+    rule_type = "exact_words"
+
+    def evaluate(self, output: str, metrics: Dict[str, Any]) -> AssertionResult:
+        target_words = int(self.expected_values[0]) if self.expected_values else 1
+        words = output.strip().split()
+        count = len(words)
+        passed = count == target_words
+        msg = f"Word count exactly matches target {target_words}" if passed else f"Fabricated output has {count} word(s), expected exactly {target_words}"
+        return AssertionResult(self.rule_type, passed, msg, expected=f"== {target_words} words", actual=f"{count} words")
+
+
 class NotEmptyAssertion(BaseAssertion):
     """Asserts that the output is not empty or pure whitespace."""
     rule_type = "not_empty"
@@ -243,6 +281,8 @@ AssertionFactory.register("exact", ExactAssertion)
 AssertionFactory.register("max_latency_sec", MaxLatencyAssertion)
 AssertionFactory.register("min_tokens_per_sec", MinTokensPerSecAssertion)
 AssertionFactory.register("min_words", MinWordsAssertion)
+AssertionFactory.register("max_words", MaxWordsAssertion)
+AssertionFactory.register("exact_words", ExactWordsAssertion)
 AssertionFactory.register("not_empty", NotEmptyAssertion)
 AssertionFactory.register("min_length", MinLengthAssertion)
 
@@ -281,6 +321,17 @@ class ModelAssertion:
     def is_all_passed(self, results: List[AssertionResult]) -> bool:
         """Returns True if every assertion in the result list passed."""
         return all(r.passed for r in results)
+
+    def evaluate_all(self, output: str, metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Evaluates model output against all registered assertion rules.
+        Returns a dictionary summary with 'all_passed' boolean and serialized 'results' list.
+        """
+        results = self.evaluate(output, metrics)
+        return {
+            "all_passed": self.is_all_passed(results),
+            "results": [r.to_dict() for r in results]
+        }
 
     def __len__(self) -> int:
         return len(self.assertions)

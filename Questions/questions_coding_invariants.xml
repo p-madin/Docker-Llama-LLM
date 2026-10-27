@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_suite name="Software Engineering Invariants Suite">
+    <!-- Test Case 1: Array Iteration Off-By-One Bug -->
+    <test_case id="code-invariant-off-by-one" tier="2" category="code_invariants" difficulty="medium">
+        <name>Array Iteration Off-By-One Boundary</name>
+        <question>In C, iterating an array of size N declared as `int arr[N];` using `for (int i = 0; i &lt;= N; i++)` will access out of bounds at index i = N. What specific error condition or runtime bug does this cause?</question>
+        <system_prompt>You are a systems programming specialist. Identify the memory bug.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>out-of-bounds</expected>
+                <expected>out of bounds</expected>
+                <expected>buffer overflow</expected>
+                <expected>segmentation fault</expected>
+                <expected>undefined behavior</expected>
+                <expected>off-by-one</expected>
+                <expected>off by one</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 2: SQL Injection Prevention via Parameterization -->
+    <test_case id="code-invariant-sqli-prevention" tier="1" category="code_invariants" difficulty="easy">
+        <name>SQL Injection Parameterization Invariant</name>
+        <question>In secure web application development, what mechanism is universally recommended to prevent SQL injection by strictly separating SQL query code from user-supplied data?</question>
+        <system_prompt>You are a software security expert. Name the database mechanism.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>parameterized quer</expected>
+                <expected>parameterized</expected>
+                <expected>prepared statement</expected>
+                <expected>parameterization</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 3: Shared Mutable State Concurrency Bug -->
+    <test_case id="code-invariant-race-condition" tier="2" category="code_invariants" difficulty="medium">
+        <name>Shared Mutable State Race Condition</name>
+        <question>When two concurrent threads read, modify, and write back to an unsynchronized shared variable such that the final outcome depends on execution timing, what type of concurrency bug occurs?</question>
+        <system_prompt>You are a concurrent programming expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>race condition</expected>
+                <expected>data race</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 4: Catastrophic Backtracking (ReDoS) -->
+    <test_case id="code-invariant-redos-pattern" tier="2" category="code_invariants" difficulty="hard">
+        <name>Catastrophic Backtracking ReDoS</name>
+        <question>What security vulnerability occurs when an untrusted input string causes a non-deterministic regular expression engine to perform exponential catastrophic backtracking, exhausting CPU resources?</question>
+        <system_prompt>You are an application security specialist.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>ReDoS</expected>
+                <expected>Regular Expression Denial of Service</expected>
+                <expected>catastrophic backtracking</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 5: IEEE 754 Floating-Point Equality Trap -->
+    <test_case id="code-invariant-float-equality" tier="2" category="code_invariants" difficulty="medium">
+        <name>IEEE 754 Floating-Point Precision</name>
+        <question>In languages like Python, C, and JavaScript, why does the expression `0.1 + 0.2 == 0.3` evaluate to False? Explain the fundamental representation cause.</question>
+        <system_prompt>You are a computer systems expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>floating-point</expected>
+                <expected>floating point</expected>
+                <expected>IEEE 754</expected>
+                <expected>binary representation</expected>
+                <expected>rounding error</expected>
+                <expected>precision</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 6: Git Detached HEAD State -->
+    <test_case id="code-invariant-git-detached-head" tier="1" category="code_invariants" difficulty="easy">
+        <name>Git Detached HEAD State</name>
+        <question>In Git version control, when a developer runs `git checkout` on a specific commit hash rather than a branch reference, what state is the working copy in?</question>
+        <system_prompt>You are a Git version control expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>detached HEAD</expected>
+                <expected>detached head</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 7: Python Immutable Tuple -->
+    <test_case id="code-invariant-immutability-python" tier="1" category="code_invariants" difficulty="easy">
+        <name>Python Tuple Immutability</name>
+        <question>In Python, is the built-in `tuple` data structure mutable or immutable? Answer with a single word.</question>
+        <system_prompt>You are a Python programming expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">immutable</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 8: Concurrency Deadlock Condition -->
+    <test_case id="code-invariant-deadlock-dining" tier="2" category="code_invariants" difficulty="medium">
+        <name>Mutual Exclusion Deadlock Condition</name>
+        <question>When two or more processes are permanently blocked because each process holds a resource that the other process requires to proceed, what condition exists?</question>
+        <system_prompt>You are an operating systems engineer.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">deadlock</assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 9: C Dangling Pointer Definition -->
+    <test_case id="code-invariant-c-dangling-pointer" tier="2" category="code_invariants" difficulty="medium">
+        <name>C Dangling Pointer Invariant</name>
+        <question>In C memory management, what term specifically describes a pointer that continues to point to a memory location after the storage allocated to that location has been deallocated via `free()`?</question>
+        <system_prompt>You are a C systems programmer.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>dangling pointer</expected>
+                <expected>dangling reference</expected>
+                <expected>wild pointer</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 10: Python Mutable Default Argument -->
+    <test_case id="code-invariant-python-default-arg" tier="2" category="code_invariants" difficulty="medium">
+        <name>Python Mutable Default Argument Invariant</name>
+        <question>In Python, why is using a mutable object as a default function argument (e.g. `def add_item(val, target=[])`) considered dangerous?</question>
+        <system_prompt>You are a Python language specialist.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>evaluated once</expected>
+                <expected>definition time</expected>
+                <expected>shared across</expected>
+                <expected>persists across</expected>
+                <expected>same list</expected>
+                <expected>same object</expected>
+                <expected>mutable default</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 11: HTTP Method Idempotence -->
+    <test_case id="code-invariant-http-idempotent-put" tier="1" category="code_invariants" difficulty="easy">
+        <name>HTTP PUT Idempotence Invariant</name>
+        <question>According to the standard HTTP/1.1 specification (RFC 7231 / RFC 9110), is the HTTP PUT method defined as idempotent? Answer Yes or No.</question>
+        <system_prompt>You are a web protocols expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Yes</expected>
+                <expected>idempotent</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 12: Worst-Case Time Complexity of Quicksort -->
+    <test_case id="code-invariant-big-o-quicksort-worst" tier="1" category="code_invariants" difficulty="easy">
+        <name>Worst-Case Quicksort Complexity</name>
+        <question>What is the worst-case time complexity of standard Quicksort with naive pivot selection, expressed in standard Big-O notation?</question>
+        <system_prompt>You are an algorithms instructor.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>O(n^2)</expected>
+                <expected>O(n²)</expected>
+                <expected>O(N^2)</expected>
+                <expected>O(N²)</expected>
+                <expected>quadratic</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 13: JSON Trailing Comma Validity -->
+    <test_case id="code-invariant-json-trailing-comma" tier="1" category="code_invariants" difficulty="easy">
+        <name>JSON RFC Trailing Comma Invariant</name>
+        <question>According to the official JSON specification (RFC 8259), are trailing commas permitted after the last element in an array or object? Answer Yes or No.</question>
+        <system_prompt>You are a strict data formats expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>No</expected>
+                <expected>not allowed</expected>
+                <expected>invalid</expected>
+                <expected>forbidden</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 14: SQL Three-Valued Logic NULL Comparison -->
+    <test_case id="code-invariant-sql-null-comparison" tier="2" category="code_invariants" difficulty="medium">
+        <name>SQL Three-Valued Logic NULL Invariant</name>
+        <question>In SQL, why does evaluating `WHERE column = NULL` never return any rows, and what comparison predicate must be used instead to match NULL values?</question>
+        <system_prompt>You are a relational database expert.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>IS NULL</expected>
+                <expected>is null</expected>
+            </assert>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>UNKNOWN</expected>
+                <expected>three-valued</expected>
+                <expected>null is not equal</expected>
+                <expected>unknown</expected>
+                <expected>truth value</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 15: HTML Form File Upload Encoding Invariant -->
+    <test_case id="code-invariant-html-file-upload-enctype" tier="1" category="code_invariants" difficulty="easy">
+        <name>HTML Form File Upload Encoding Invariant</name>
+        <question>In HTML what &lt;form&gt; attribute facilitates the &lt;input type="file"&gt; for sending byte data to the HTTP server?</question>
+        <system_prompt>You are a web protocols and HTML standards expert. State the required attribute value.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains" case_sensitive="false">multipart/form-data</assert>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>enctype</expected>
+                <expected>multipart</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 16: Java Sorted Tree Data Structure O(log n) -->
+    <test_case id="code-invariant-java-tree-structure" tier="2" category="code_invariants" difficulty="medium">
+        <name>Java Sorted Tree Collection (O(log n))</name>
+        <question>In Java, what java.util utility tree type is internally sorted - with O(logn) complexity?</question>
+        <system_prompt>You are a Java algorithms specialist. Name the class concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>TreeSet</expected>
+                <expected>TreeMap</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 17: Database EER Specialization - Disjoint Specialization Invariant -->
+    <test_case id="code-invariant-db-disjoint-constraint" tier="2" category="code_invariants" difficulty="medium">
+        <name>Database Disjoint Specialization Invariant</name>
+        <question>When designing a database, what property describes a super relation that may be extended by 1 but not 2 sub relations?</question>
+        <system_prompt>You are a database design and data modeling specialist. Name the constraint or property concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>disjoint</expected>
+                <expected>exclusive</expected>
+                <expected>disjointness</expected>
+                <expected>single inheritance</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 18: Database EER Specialization - Total Specialization / Completeness -->
+    <test_case id="code-invariant-db-completeness-constraint" tier="2" category="code_invariants" difficulty="medium">
+        <name>Database Total Specialization Completeness Invariant</name>
+        <question>When designing a database, what property describes an abstract super relation which must be extended by one of it's sub relations?</question>
+        <system_prompt>You are a database architecture and data modeling specialist. State the property or constraint concisely.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>Completeness</expected>
+                <expected>Total Specialization</expected>
+                <expected>Total constraint</expected>
+                <expected>Totalization</expected>
+                <expected>Mandatory</expected>
+                <expected>total participation</expected>
+            </assert>
+        </assertions>
+    </test_case>
+
+    <!-- Test Case 19: Database Normalization - 1NF Invariant -->
+    <test_case id="code-invariant-db-1nf-multivalued" tier="2" category="code_invariants" difficulty="medium">
+        <name>First Normal Form (1NF) Attribute Atomicity Invariant</name>
+        <question>What is the difference between unnormalized-form and first-normal-form?</question>
+        <system_prompt>You are a relational database theory specialist. Explain the difference regarding attribute values concisely in one or two sentences.</system_prompt>
+        <temperature>0.0</temperature>
+        <assertions>
+            <assert type="contains_any" case_sensitive="false">
+                <expected>multi-valued</expected>
+                <expected>multivalued</expected>
+                <expected>atomic</expected>
+                <expected>repeating group</expected>
+                <expected>repeating groups</expected>
+            </assert>
+        </assertions>
+    </test_case>
+</test_suite>

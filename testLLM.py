@@ -78,7 +78,10 @@ class TestCase:
                  max_tokens: int = 1200,
                  model_override: Optional[str] = None,
                  assertions: Optional[ModelAssertion] = None,
-                 source_file: str = ""):
+                 source_file: str = "",
+                 tier: int = 1,
+                 category: str = "general",
+                 difficulty: str = "medium"):
         self.test_id = test_id
         self.name = name
         self.question = question
@@ -88,6 +91,9 @@ class TestCase:
         self.model_override = model_override
         self.assertions = assertions if assertions is not None else ModelAssertion()
         self.source_file = source_file
+        self.tier = tier
+        self.category = category
+        self.difficulty = difficulty
 
 
 
@@ -155,6 +161,11 @@ def parse_questions_xml(xml_path: str) -> List[TestCase]:
 
                 assertions.add_from_spec(rule_type, expected_vals, case_sensitive)
 
+        tier_val = tc_elem.attrib.get("tier", "1")
+        tier = int(tier_val) if tier_val and tier_val.isdigit() else 1
+        category = tc_elem.attrib.get("category", "general")
+        difficulty = tc_elem.attrib.get("difficulty", "medium")
+
         test_cases.append(TestCase(
             test_id=test_id,
             name=name,
@@ -164,7 +175,10 @@ def parse_questions_xml(xml_path: str) -> List[TestCase]:
             max_tokens=max_tokens,
             model_override=model_override,
             assertions=assertions,
-            source_file=base_file
+            source_file=base_file,
+            tier=tier,
+            category=category,
+            difficulty=difficulty
         ))
 
     return test_cases
@@ -185,13 +199,19 @@ def load_all_questions(path_or_pattern: str) -> Tuple[List[TestCase], List[str]]
 
 
 class LLMClient:
-    """Handles communication with Ollama, Open-WebUI, or OpenAI-compatible endpoints."""
+    """Handles communication with Ollama, Google Gemini, Open-WebUI, or OpenAI-compatible endpoints."""
     def __init__(self, host: str = "http://localhost:11434", api_type: str = "ollama",
-                 api_key: Optional[str] = None, timeout: int = 60):
+                 api_key: Optional[str] = None, timeout: int = 60,
+                 gemini_api_key: Optional[str] = None):
         self.host = host.rstrip("/")
         self.api_type = api_type.lower()
         self.api_key = api_key
+        self.gemini_api_key = gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
         self.timeout = timeout
+
+    def is_gemini(self, model: str) -> bool:
+        """Determines if a request should be routed to the Google Gemini API."""
+        return self.api_type in ("gemini", "google") or model.lower().startswith("gemini")
 
     def send_chat(self, model: str, question: str, system_prompt: str = "",
                   temperature: float = 0.0, max_tokens: int = 1200) -> Dict[str, Any]:
@@ -203,13 +223,38 @@ class LLMClient:
             "raw_response": Dict[str, Any]
         }
         """
-        messages = []
-        # A/B Testing: Disabled system_prompt dispatch to test performance and compliance impact
-        # if system_prompt:
-        #     messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": question})
+        is_gemini_req = self.is_gemini(model)
 
-        if self.api_type == "ollama":
+        if is_gemini_req:
+            key = self.gemini_api_key or self.api_key or os.environ.get("GEMINI_API_KEY", "")
+            if not key:
+                raise RuntimeError(
+                    "Google Gemini API key required. Please set GEMINI_API_KEY in .env or provide --api-key."
+                )
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            headers = {"Content-Type": "application/json"}
+            # Gemini models allocate maxOutputTokens across thinking and candidate output
+            gemini_max_tokens = max(max_tokens, 2400) if max_tokens else 2400
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": question}]}
+                ],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "maxOutputTokens": gemini_max_tokens
+                }
+            }
+            if system_prompt:
+                payload["systemInstruction"] = {
+                    "parts": [{"text": system_prompt}]
+                }
+
+        elif self.api_type == "ollama":
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": question})
+
             url = f"{self.host}/api/chat"
             payload = {
                 "model": model,
@@ -221,8 +266,15 @@ class LLMClient:
                     "num_ctx": 8192
                 }
             }
+            headers = {"Content-Type": "application/json"}
+
         else:
             # Open-WebUI or standard OpenAI endpoint
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": question})
+
             if "/v1" in self.host or "/api" in self.host:
                 url = f"{self.host}/chat/completions"
             elif ":3000" in self.host:
@@ -237,10 +289,9 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "stream": False
             }
-
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers = {"Content-Type": "application/json"}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
 
         req_data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=req_data, headers=headers)
@@ -252,9 +303,12 @@ class LLMClient:
                 raw_json = json.loads(resp_bytes.decode("utf-8"))
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"HTTP {e.code} Error from {url}: {err_body}") from e
+            # Mask API key in error messages if present in query string
+            safe_url = url.split("?")[0]
+            raise RuntimeError(f"HTTP {e.code} Error from {safe_url}: {err_body}") from e
         except urllib.error.URLError as e:
-            raise RuntimeError(f"Network error connecting to {url}: {e.reason}") from e
+            safe_url = url.split("?")[0]
+            raise RuntimeError(f"Network error connecting to {safe_url}: {e.reason}") from e
 
         end_time = time.perf_counter()
         wall_latency_sec = end_time - start_time
@@ -265,7 +319,49 @@ class LLMClient:
             "latency_ms": round(wall_latency_sec * 1000, 1),
         }
 
-        if self.api_type == "ollama" and "message" in raw_json:
+        thinking = ""
+
+        if is_gemini_req:
+            candidates = raw_json.get("candidates", [])
+            content = ""
+            finish_reason = ""
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text_parts = []
+                thought_parts = []
+                for p in parts:
+                    if p.get("thought"):
+                        thought_parts.append(p.get("text", ""))
+                    elif "text" in p:
+                        text_parts.append(p.get("text", ""))
+                if thought_parts:
+                    thinking = "".join(thought_parts)
+                content = "".join(text_parts) if text_parts else "".join(p.get("text", "") for p in parts if "text" in p)
+                finish_reason = candidates[0].get("finishReason", "")
+            usage = raw_json.get("usageMetadata", {})
+            p_tok = usage.get("promptTokenCount", 0)
+            c_tok = usage.get("candidatesTokenCount", 0)
+            th_tok = usage.get("thoughtsTokenCount", 0)
+            total_tok = usage.get("totalTokenCount", p_tok + c_tok + th_tok)
+            metrics["prompt_tokens"] = p_tok
+            metrics["completion_tokens"] = c_tok
+            metrics["thinking_tokens"] = th_tok
+            metrics["total_tokens"] = total_tok
+            metrics["finish_reason"] = finish_reason
+            if finish_reason == "MAX_TOKENS" and th_tok > 0:
+                metrics["truncated_in_thinking"] = True
+
+            gen_tok = c_tok + th_tok
+            if wall_latency_sec > 0 and gen_tok > 0:
+                metrics["eval_tokens_per_sec"] = round(gen_tok / wall_latency_sec, 2)
+            else:
+                metrics["eval_tokens_per_sec"] = 0.0
+            if wall_latency_sec > 0 and p_tok > 0:
+                metrics["prompt_tokens_per_sec"] = round(p_tok / wall_latency_sec, 2)
+            else:
+                metrics["prompt_tokens_per_sec"] = 0.0
+
+        elif self.api_type == "ollama" and "message" in raw_json:
             msg = raw_json.get("message", {})
             content = msg.get("content", "")
             thinking = msg.get("thinking", "")
@@ -300,7 +396,9 @@ class LLMClient:
         else:
             # OpenAI / Open-WebUI format
             choices = raw_json.get("choices", [])
-            content = choices[0].get("message", {}).get("content", "") if choices else ""
+            msg = choices[0].get("message", {}) if choices else {}
+            content = msg.get("content", "")
+            thinking = msg.get("reasoning_content", "") or msg.get("thinking", "")
             usage = raw_json.get("usage", {})
             p_tok = usage.get("prompt_tokens", 0)
             c_tok = usage.get("completion_tokens", 0)
@@ -314,6 +412,7 @@ class LLMClient:
 
         return {
             "content": content,
+            "thinking": thinking,
             "metrics": metrics,
             "raw_response": raw_json
         }
@@ -321,10 +420,13 @@ class LLMClient:
 
 def warmup_model(client: LLMClient, model: str) -> None:
     """
-    Verifies that model weights, CUDA kernels, and SWA / KV-cache buffers
-    (num_ctx=8192) are active and warm in GPU VRAM before benchmark timing begins.
+    Verifies that model weights, CUDA kernels, and buffers are ready
+    before benchmark timing begins.
     """
-    print(f"{Colors.DIM}Verifying model '{model}' readiness in GPU memory...{Colors.RESET}", end="", flush=True)
+    if client.is_gemini(model):
+        print(f"{Colors.DIM}Verifying connection to Google Gemini model '{model}'...{Colors.RESET}", end="", flush=True)
+    else:
+        print(f"{Colors.DIM}Verifying model '{model}' readiness in GPU memory...{Colors.RESET}", end="", flush=True)
     t0 = time.perf_counter()
     try:
         client.send_chat(model=model, question="Warmup check: confirm ready.", max_tokens=5)
@@ -344,7 +446,8 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
 
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.RESET}")
     print(f"{Colors.BOLD}{Colors.CYAN} Running Test Suite on Model: {Colors.YELLOW}{default_model}{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN} Endpoint: {Colors.RESET}{client.host} ({client.api_type.upper()})")
+    endpoint_display = "https://generativelanguage.googleapis.com (GEMINI)" if client.is_gemini(default_model) else f"{client.host} ({client.api_type.upper()})"
+    print(f"{Colors.BOLD}{Colors.CYAN} Endpoint: {Colors.RESET}{endpoint_display}")
     print(f"{Colors.BOLD}{Colors.CYAN} Total Test Cases: {Colors.RESET}{len(test_cases)}")
     print(f"{Colors.BOLD}{Colors.CYAN} Blanket Max Tokens: {Colors.RESET}{blanket_max_tokens}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.RESET}\n")
@@ -369,11 +472,18 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
                 temperature=tc.temperature,
                 max_tokens=effective_max_tokens
             )
-            output_text = resp["content"]
+            final_content = resp.get("content", "")
+            thinking_content = resp.get("thinking", "")
+            if thinking_content:
+                output_text = f"<think>\n{thinking_content.strip()}\n</think>\n\n{final_content.strip()}"
+            else:
+                output_text = final_content
+
             metrics = resp["metrics"]
             error_msg = None
         except Exception as e:
             output_text = ""
+            final_content = ""
             metrics = {"latency_sec": round(time.perf_counter() - case_start, 3), "eval_tokens_per_sec": 0.0}
             error_msg = str(e)
 
@@ -391,18 +501,32 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
             ]
             total_assertions += 1
         else:
-            raw_results = tc.assertions.evaluate(output_text, metrics)
-            total_assertions += len(raw_results)
-            passed_assertions += sum(1 for r in raw_results if r.passed)
-            case_passed = tc.assertions.is_all_passed(raw_results)
+            # Assertions are evaluated strictly on final_content when thinking is present
+            # to avoid CoT thinking pollution and prevent models that stall in <think> from passing.
+            if thinking_content and not final_content.strip():
+                case_passed = False
+                raw_results = [
+                    AssertionResult(
+                        rule_type="response_delivered",
+                        passed=False,
+                        message="Model failed to deliver an answer (truncated or halted in <think> phase)"
+                    )
+                ]
+                total_assertions += 1
+            else:
+                eval_target = final_content if thinking_content else (final_content if final_content else output_text)
+                raw_results = tc.assertions.evaluate(eval_target, metrics)
+                total_assertions += len(raw_results)
+                passed_assertions += sum(1 for r in raw_results if r.passed)
+                case_passed = tc.assertions.is_all_passed(raw_results)
 
         assertion_results = [r.to_dict() for r in raw_results]
 
         # Print Output Snippet
-        clean_preview = output_text.strip().replace("\n", " ")
+        clean_preview = (final_content or output_text).strip().replace("\n", " ")
         if len(clean_preview) > 120:
             clean_preview = clean_preview[:117] + "..."
-        if not output_text and metrics.get("truncated_in_thinking"):
+        if not final_content and metrics.get("truncated_in_thinking"):
             clean_preview = f"{Colors.YELLOW}(cut off in <think> phase at {effective_max_tokens} tokens - increase headroom){Colors.RESET}"
         print(f"{Colors.DIM}Answer:{Colors.RESET}   {clean_preview if clean_preview else '(empty/error)'}")
 
@@ -430,6 +554,9 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
         results.append({
             "test_id": tc.test_id,
             "name": tc.name,
+            "tier": tc.tier,
+            "category": tc.category,
+            "difficulty": tc.difficulty,
             "model": target_model,
             "question": tc.question,
             "output": output_text,
@@ -455,7 +582,7 @@ def run_evaluation(client: LLMClient, default_model: str, test_cases: List[TestC
 
     summary = {
         "model": default_model,
-        "endpoint": client.host,
+        "endpoint": "https://generativelanguage.googleapis.com" if client.is_gemini(default_model) else client.host,
         "total_questions": len(test_cases),
         "questions_solved": passed_cases,
         "questions_failed": failed_cases,
@@ -586,16 +713,16 @@ def main():
         help=f"Path, directory, or glob pattern for questions XML files. Default (from .env): '{env_questions}'"
     )
     parser.add_argument(
-        "--endpoint", choices=["ollama", "openai", "openwebui"], default=env_endpoint,
-        help=f"API backend type: 'ollama' or 'openai'/'openwebui'. Default (from .env): '{env_endpoint}'"
+        "--endpoint", choices=["ollama", "openai", "openwebui", "gemini", "google"], default=env_endpoint,
+        help=f"API backend type: 'ollama', 'gemini', or 'openai'/'openwebui'. Default (from .env): '{env_endpoint}'"
     )
     parser.add_argument(
         "--host", default=env_host,
-        help=f"Host URL (e.g. 'http://localhost:11434'). Default (from .env): '{env_host}'"
+        help=f"Host URL (e.g. 'http://localhost:11434' or 'https://generativelanguage.googleapis.com'). Default (from .env): '{env_host}'"
     )
     parser.add_argument(
-        "--api-key", default=os.environ.get("OPENAI_API_KEY", ""),
-        help="API key or Bearer token (optional, for Open-WebUI or protected OpenAI endpoints)."
+        "--api-key", default="",
+        help="API key (for Gemini or protected OpenAI/Open-WebUI endpoints)."
     )
     parser.add_argument(
         "--timeout", type=int, default=60,
@@ -625,16 +752,39 @@ def main():
         "--max-tokens", type=int, default=1200,
         help="Blanket max generation tokens per request across all questions. Default: 1200"
     )
+    env_db = os.environ.get("DATABASE_PATH", "benchmark.db")
+    parser.add_argument(
+        "--db", default=env_db,
+        help=f"Path to SQLite database for relational persistence. Default (from .env): '{env_db}'"
+    )
+    parser.add_argument(
+        "--no-db", action="store_true",
+        help="Disable automatic dual-write to SQLite database."
+    )
 
     args = parser.parse_args()
 
     # Determine default host
     host = args.host
-    if not host:
-        if args.endpoint in ["openai", "openwebui"]:
+    if not host or (args.endpoint in ["gemini", "google"] and "localhost" in host):
+        if args.endpoint in ["gemini", "google"]:
+            host = "https://generativelanguage.googleapis.com"
+        elif args.endpoint in ["openai", "openwebui"]:
             host = "http://localhost:3000"
         else:
             host = "http://localhost:11434"
+
+    # Split multiple models if comma-separated
+    models = [m.strip() for m in args.model.split(",") if m.strip()]
+
+    # Resolve API keys from CLI or environment
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = args.api_key
+    if not api_key:
+        if args.endpoint in ["gemini", "google"] or any(m.lower().startswith("gemini") for m in models):
+            api_key = gemini_key
+        else:
+            api_key = os.environ.get("OPENAI_API_KEY", "")
 
     # Parse all questions XML files matching path/pattern
     try:
@@ -647,12 +797,10 @@ def main():
     client = LLMClient(
         host=host,
         api_type=args.endpoint,
-        api_key=args.api_key,
+        api_key=api_key,
+        gemini_api_key=gemini_key,
         timeout=args.timeout
     )
-
-    # Split multiple models if comma-separated
-    models = [m.strip() for m in args.model.split(",") if m.strip()]
 
     all_summaries = []
     for model_name in models:
@@ -687,6 +835,17 @@ def main():
             export_markdown_report([summary], model_md_path)
         except Exception as e:
             print(f"Warning: Failed to save Markdown report to {model_md_path}: {e}")
+
+        # Relational Persistence: Dual-Write directly to SQLite database (Phase 2)
+        if not args.no_db and args.db:
+            try:
+                import benchmark_store
+                conn = benchmark_store.init_db(args.db)
+                benchmark_store.sync_questions_from_xml(conn, args.questions)
+                run_id = benchmark_store.record_full_summary(conn, summary)
+                print(f"Relational metrics persisted to: {args.db} (Run #{run_id})")
+            except Exception as e:
+                print(f"Warning: Failed to persist to benchmark database '{args.db}': {e}")
 
     # If multiple models were tested, also save comparison report
     if len(all_summaries) > 1:
